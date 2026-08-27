@@ -62,7 +62,7 @@ yarn tiny fix-worktree
 yarn tiny check
 ```
 
-最终结果：TypeScript 类型检查、Oxlint、Oxfmt 全部通过；Vitest 为 168 passed、2 个显式环境门
+最终结果：TypeScript 类型检查、Oxlint、Oxfmt 全部通过；Vitest 为 173 passed、2 个显式环境门
 测试 skipped；C++ `ctest` 为 4/4 passed。两个被环境门跳过的真实测试随后分别用本机参数显式
 执行并通过。
 
@@ -72,15 +72,21 @@ yarn tiny check
 组合层执行；本地模型注入只跳过重复网络传输，安装 metadata、离线 SHA256、engine load、Voice
 提取和两次重启均为真实路径。
 
+Voice clone 输入使用仓库内 `apps/daemon/test/fixtures/voice-brief/` 的五组 Voice Brief 样本，分别
+覆盖邻家妹妹、默认中文助理、甜妹助理、元气搭子和知性姐姐。每条内容都按对应人设编写，只含
+中文且时长为 13 至 16 秒；音频统一规范化为 24 kHz 单声道 PCM WAV，同名文件保存严格对应的
+逐字稿。两组真实模型测试都会依次提取全部五个 Voice，1.7B 使用甜妹助理完成合成，0.6B 使用
+知性姐姐完成合成。
+
 | 模型             | 后端   | 完整测试耗时 |            输出 | 结果 |
 | ---------------- | ------ | -----------: | --------------: | ---- |
-| 1.7B Base Q4_K_M | Vulkan |      13.04 s |    11,564 bytes | 通过 |
-| 0.6B Base Q4_K_M | Vulkan |      45.19 s | 7,864,364 bytes | 通过 |
+| 1.7B Base Q4_K_M | Vulkan |       9.49 s |   119,084 bytes | 通过 |
+| 0.6B Base Q4_K_M | Vulkan |      46.79 s | 7,864,364 bytes | 通过 |
 
 两份文件均由 `file` 确认为 RIFF/WAVE、PCM 16-bit、mono、24 kHz。测试同时验证：
 
 - setup/install/use 后重启可加载真实模型；
-- 一条 CLI 命令完成真实 Voice latent 提取；
+- 五组纯中文人设样本逐一完成真实 Voice latent 提取；
 - 默认 Voice 在 daemon 再次重启后仍可合成；
 - 已加载模型的 remove 返回 `resource_busy`。
 

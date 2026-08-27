@@ -2,6 +2,7 @@ import { link, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Writable } from "node:stream";
+import { fileURLToPath } from "node:url";
 
 import { runCli } from "./apps/cli/src/cli.js";
 import { DaemonRpcClient } from "./apps/cli/src/rpc-client.js";
@@ -19,9 +20,15 @@ const engineCommand = process.env.VOXSPEECH_P3_ENGINE;
 const talkerPath = process.env.VOXSPEECH_P3_TALKER;
 const tokenizerPath = process.env.VOXSPEECH_P3_TOKENIZER;
 const backend = process.env.VOXSPEECH_P3_BACKEND;
-const referenceWav = process.env.VOXSPEECH_P3_REFERENCE_WAV;
 const modelId = process.env.VOXSPEECH_P3_MODEL_ID ?? "qwen3-tts-1.7b-base-q4_k_m";
-const enabled = Boolean(engineCommand && talkerPath && tokenizerPath && backend && referenceWav);
+const voiceFixtureDirectory = fileURLToPath(
+	new URL("./apps/daemon/test/fixtures/voice-brief/", import.meta.url),
+);
+const voiceFixtureIds = ["neighbor", "default", "sweet", "energetic", "thoughtful"] as const;
+const selectedVoiceId =
+	process.env.VOXSPEECH_P3_VOICE_FIXTURE ??
+	(modelId === "qwen3-tts-0.6b-base-q4_k_m" ? "thoughtful" : "sweet");
+const enabled = Boolean(engineCommand && talkerPath && tokenizerPath && backend);
 const directories: string[] = [];
 
 afterAll(async () => {
@@ -32,8 +39,10 @@ afterAll(async () => {
 
 describe.skipIf(!enabled)("P3 real product acceptance", () => {
 	it("persists setup and Voice state across real engine restarts", async () => {
-		if (!engineCommand || !talkerPath || !tokenizerPath || !referenceWav || !isBackend(backend))
+		if (!engineCommand || !talkerPath || !tokenizerPath || !isBackend(backend))
 			throw new Error("P3 real acceptance environment is incomplete");
+		if (!voiceFixtureIds.includes(selectedVoiceId as (typeof voiceFixtureIds)[number]))
+			throw new Error(`Unknown P3 Voice fixture: ${selectedVoiceId}`);
 		const root = await mkdtemp(path.join(tmpdir(), "voxspeech-p3-real-"));
 		directories.push(root);
 		const paths = resolveVoxSpeechPaths(
@@ -78,14 +87,19 @@ describe.skipIf(!enabled)("P3 real product acceptance", () => {
 		await daemon.close();
 
 		daemon = await startProductDaemon(options);
-		await runCli(
-			["voice", "clone", "freeman", referenceWav, "This is the voice of the great Freeman."],
-			paths.socketFile,
-			{ output: discard() },
-		);
-		await runCli(["voice", "use", "freeman"], paths.socketFile, { output: discard() });
+		for (const voiceId of voiceFixtureIds) {
+			const transcript = (
+				await readFile(path.join(voiceFixtureDirectory, `${voiceId}.txt`), "utf8")
+			).trim();
+			await runCli(
+				["voice", "clone", voiceId, path.join(voiceFixtureDirectory, `${voiceId}.wav`), transcript],
+				paths.socketFile,
+				{ output: discard() },
+			);
+		}
+		await runCli(["voice", "use", selectedVoiceId], paths.socketFile, { output: discard() });
 		const outputPath = process.env.VOXSPEECH_P3_OUTPUT ?? path.join(root, "p3-real.wav");
-		await runCli(["speak", "P3 产品流程已经接通。", "--output", outputPath], paths.socketFile);
+		await runCli(["speak", "产品流程已经接通。", "--output", outputPath], paths.socketFile);
 		expect((await readFile(outputPath)).subarray(0, 4).toString("ascii")).toBe("RIFF");
 		await expect(
 			runCli(["model", "remove", modelId], paths.socketFile, {
