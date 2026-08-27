@@ -6,6 +6,25 @@ develop:
     - name: daemon
       description: 使用 VOXSPEECH_ENGINE 指定的原生引擎运行开发态 daemon
       command: node --import tsx apps/daemon/src/main.ts
+    - name: preview
+      description: 使用当前模型和 Voice 合成并立即播放，后续参数传给 speak
+      command: node --import tsx apps/cli/src/main.ts speak --play
+      actions:
+        - name: sample
+          description: 合成固定中文评测句，播放并保存到 /tmp/voxspeech-preview.wav
+          command: node --import tsx apps/cli/src/main.ts speak "你好，这里是 VoxSpeech 语音效果测试。现在将检查音色、语速、停顿和中文表达是否自然。" --play --output /tmp/voxspeech-preview.wav
+        - name: save
+          description: 合成自定义文本，播放并保存到 /tmp/voxspeech-preview.wav
+          command: node --import tsx apps/cli/src/main.ts speak --play --output /tmp/voxspeech-preview.wav
+        - name: status
+          description: 显示测试所用 daemon、engine 和模型状态
+          command: node --import tsx apps/cli/src/main.ts status
+        - name: models
+          description: 显示可用于测试的模型
+          command: node --import tsx apps/cli/src/main.ts model list
+        - name: voices
+          description: 显示可用于测试的 Voice
+          command: node --import tsx apps/cli/src/main.ts voice list
     - name: model
       description: 模型开发工具
       actions:

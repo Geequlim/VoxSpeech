@@ -48,6 +48,27 @@ yarn tiny cli voice use assistant
 yarn tiny cli speak "你好" --output speech.wav
 ```
 
+快速试听当前 daemon 已加载的模型和 Voice：
+
+```bash
+# 一条固定评测句：播放并保存到 /tmp/voxspeech-preview.wav
+yarn tiny preview/sample
+
+# 任意文本：只播放
+yarn tiny preview "你好，这是一次快速试听。"
+
+# 任意文本：播放并保存，可用 --voice 临时指定 Voice
+yarn tiny preview/save --voice assistant "你好，这是指定音色的试听。"
+
+# 测试前查看实际加载状态、模型和 Voice
+yarn tiny preview/status
+yarn tiny preview/models
+yarn tiny preview/voices
+```
+
+`preview` 复用 Commander 的 `speak` 和 daemon 合成链路。P3 不支持运行时动态切换模型或
+后端；执行 `model use` 或修改 backend 后，需要重启 daemon 再试听。
+
 详细设计与实施顺序见：
 
 - [技术规划](docs/technical-plan.md)
