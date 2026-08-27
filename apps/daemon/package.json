@@ -5,10 +5,12 @@
 	"type": "module",
 	"dependencies": {
 		"@sinclair/typebox": "0.34.52",
+		"@tinyaxis/model-downloader": "workspace:^",
 		"@voxspeech/config": "workspace:^",
 		"@voxspeech/core": "workspace:^",
 		"@voxspeech/engine-client": "workspace:^",
-		"@voxspeech/protocol": "workspace:^"
+		"@voxspeech/protocol": "workspace:^",
+		"yaml": "2.9.0"
 	},
 	"engines": {
 		"node": ">=24"

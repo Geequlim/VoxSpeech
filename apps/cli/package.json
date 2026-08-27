@@ -5,6 +5,7 @@
 	"type": "module",
 	"dependencies": {
 		"@sinclair/typebox": "0.34.52",
+		"@voxspeech/config": "workspace:^",
 		"@voxspeech/core": "workspace:^",
 		"@voxspeech/protocol": "workspace:^"
 	},

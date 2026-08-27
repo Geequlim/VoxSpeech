@@ -98,6 +98,12 @@ export const DiagnosticsResultSchema = strictObject({
 });
 
 export const ModelIdParamsSchema = strictObject({ id: Type.String({ minLength: 1 }) });
+export const ModelInstallParamsSchema = strictObject({
+	id: Type.String({ minLength: 1 }),
+	hubUrl: Type.Optional(Type.String({ minLength: 1 })),
+	proxy: Type.Optional(Type.String({ minLength: 1 })),
+	connections: Type.Optional(Type.Integer({ minimum: 1, maximum: 32 })),
+});
 export const ModelEntrySchema = strictObject({
 	id: Type.String({ minLength: 1 }),
 	installed: Type.Boolean(),
@@ -136,6 +142,11 @@ export const VoxSpeechConfigSchema = strictObject({
 	}),
 	model: strictObject({ default: nullableString }),
 	voice: strictObject({ default: nullableString }),
+	download: strictObject({
+		hubUrl: nullableString,
+		proxy: nullableString,
+		connections: Type.Union([Type.Integer({ minimum: 1, maximum: 32 }), Type.Null()]),
+	}),
 	api: strictObject({
 		enabled: Type.Boolean(),
 		host: Type.String({ minLength: 1 }),
@@ -164,7 +175,7 @@ export const DaemonRequestSchema = Type.Union([
 	requestSchema("speech.synthesize", DaemonSpeechSynthesizeParamsSchema),
 	requestSchema("speech.cancel", SpeechCancelParamsSchema),
 	noParamsRequestSchema("model.list"),
-	requestSchema("model.install", ModelIdParamsSchema),
+	requestSchema("model.install", ModelInstallParamsSchema),
 	requestSchema("model.verify", ModelIdParamsSchema),
 	requestSchema("model.use", ModelIdParamsSchema),
 	requestSchema("model.remove", ModelIdParamsSchema),
@@ -205,6 +216,7 @@ export type DaemonSpeechSynthesizeParams = Static<typeof DaemonSpeechSynthesizeP
 export type DaemonStatusResult = Static<typeof DaemonStatusResultSchema>;
 export type DiagnosticsResult = Static<typeof DiagnosticsResultSchema>;
 export type ModelIdParams = Static<typeof ModelIdParamsSchema>;
+export type ModelInstallParams = Static<typeof ModelInstallParamsSchema>;
 export type ModelEntry = Static<typeof ModelEntrySchema>;
 export type ModelListResult = Static<typeof ModelListResultSchema>;
 export type ModelOperationResult = Static<typeof ModelOperationResultSchema>;

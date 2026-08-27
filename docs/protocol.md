@@ -103,6 +103,9 @@ engine 准备完成后 daemon 发送 `speech.started`，随后发送零到多个
 | `model.use`     | 设置默认模型                     |
 | `model.remove`  | 删除未被活动请求占用的模型       |
 
+`model.install` 接受 `{ id, hubUrl?, proxy?, connections? }`。后三项是单次安装覆盖值；未提供
+时依次使用 YAML download 配置、环境变量和 downloader 默认值。
+
 ### 4.4 Voice
 
 | Method         | 用途                                        |

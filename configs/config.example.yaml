@@ -9,7 +9,12 @@ model:
   default: qwen3-tts-1.7b-base-q4_k_m
 
 voice:
-  default: assistant
+  default: null
+
+download:
+  hubUrl: null
+  proxy: null
+  connections: null
 
 api:
   enabled: true

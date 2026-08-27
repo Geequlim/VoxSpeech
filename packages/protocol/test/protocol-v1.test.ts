@@ -202,6 +202,7 @@ describe("daemon request dispatch", () => {
 			engine: { backend: "auto", idleTimeout: "10m", maxBatch: 1 },
 			model: { default: null },
 			voice: { default: null },
+			download: { hubUrl: null, proxy: null, connections: null },
 			api: { enabled: true, host: "127.0.0.1", port: 8080 },
 			audio: { format: "wav" },
 		};
@@ -212,7 +213,12 @@ describe("daemon request dispatch", () => {
 			},
 			"speech.synthesize": { input: "hello" },
 			"speech.cancel": { requestId: "synth-1" },
-			"model.install": { id: "model" },
+			"model.install": {
+				id: "model",
+				hubUrl: "https://hf-mirror.example",
+				proxy: "http://127.0.0.1:7890",
+				connections: 8,
+			},
 			"model.verify": { id: "model" },
 			"model.use": { id: "model" },
 			"model.remove": { id: "model" },

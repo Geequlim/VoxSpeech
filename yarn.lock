@@ -559,7 +559,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@tinyaxis/model-downloader@workspace:packages/model-downloader":
+"@tinyaxis/model-downloader@workspace:^, @tinyaxis/model-downloader@workspace:packages/model-downloader":
   version: 0.0.0-use.local
   resolution: "@tinyaxis/model-downloader@workspace:packages/model-downloader"
   dependencies:
@@ -900,6 +900,7 @@ __metadata:
   resolution: "@voxspeech/cli@workspace:apps/cli"
   dependencies:
     "@sinclair/typebox": "npm:0.34.52"
+    "@voxspeech/config": "workspace:^"
     "@voxspeech/core": "workspace:^"
     "@voxspeech/protocol": "workspace:^"
   languageName: unknown
@@ -908,6 +909,10 @@ __metadata:
 "@voxspeech/config@workspace:^, @voxspeech/config@workspace:packages/config":
   version: 0.0.0-use.local
   resolution: "@voxspeech/config@workspace:packages/config"
+  dependencies:
+    "@sinclair/typebox": "npm:0.34.52"
+    "@voxspeech/protocol": "workspace:^"
+    yaml: "npm:2.9.0"
   languageName: unknown
   linkType: soft
 
@@ -924,10 +929,12 @@ __metadata:
   resolution: "@voxspeech/daemon@workspace:apps/daemon"
   dependencies:
     "@sinclair/typebox": "npm:0.34.52"
+    "@tinyaxis/model-downloader": "workspace:^"
     "@voxspeech/config": "workspace:^"
     "@voxspeech/core": "workspace:^"
     "@voxspeech/engine-client": "workspace:^"
     "@voxspeech/protocol": "workspace:^"
+    yaml: "npm:2.9.0"
   languageName: unknown
   linkType: soft
 
@@ -4013,7 +4020,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"yaml@npm:^2.9.0":
+"yaml@npm:2.9.0, yaml@npm:^2.9.0":
   version: 2.9.0
   resolution: "yaml@npm:2.9.0"
   bin:
