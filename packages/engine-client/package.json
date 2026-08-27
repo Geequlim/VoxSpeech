@@ -8,6 +8,7 @@
 		".": "./src/index.ts"
 	},
 	"dependencies": {
+		"@sinclair/typebox": "0.34.52",
 		"@voxspeech/protocol": "workspace:^"
 	},
 	"engines": {

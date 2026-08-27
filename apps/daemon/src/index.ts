@@ -1,4 +1,5 @@
-import { canAcceptSynthesis } from "@voxspeech/engine-client";
+export * from "./fake-synthesis.js";
+export * from "./server.js";
 
 export interface DaemonStatus {
 	readonly acceptingRequests: boolean;
@@ -7,7 +8,7 @@ export interface DaemonStatus {
 
 export function createInitialDaemonStatus(): DaemonStatus {
 	return {
-		acceptingRequests: canAcceptSynthesis("starting"),
+		acceptingRequests: false,
 		state: "starting",
 	};
 }

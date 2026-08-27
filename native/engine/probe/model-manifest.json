@@ -1,0 +1,16 @@
+{
+	"repository": "Serveurperso/Qwen3-TTS-GGUF",
+	"revision": "e0f336a048a3de02b29b8ad92969217d9ecffe3e",
+	"files": [
+		{
+			"name": "qwen-talker-1.7b-base-Q4_K_M.gguf",
+			"size": 1219245248,
+			"sha256": "ea393ebaf2167ea23ce9fc18b093822851358a950d7075cd47ab4f6ce23e887d"
+		},
+		{
+			"name": "qwen-tokenizer-12hz-Q4_K_M.gguf",
+			"size": 254974752,
+			"sha256": "cf3788b4d50aaa665fb6e57c170396aae03a3555fea52d2b5d0cda902d658039"
+		}
+	]
+}

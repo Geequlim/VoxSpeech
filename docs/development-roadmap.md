@@ -56,6 +56,10 @@ Agent 不得同时修改同一个文件；根配置、共享协议和跨包依�
 - 验证 cooperative cancellation、正常退出和显存回收；
 - 记录 TTFA、RTF 与峰值显存。
 
+模型资产通过共享 TypeScript 下载器准备：支持 Hugging Face 官方/镜像端点、代理、
+多连接 Range 分块、跨进程续传、SHA256 校验和原子落盘。native probe 不再维护独立的
+网络下载脚本。
+
 ### Agent B：Node engine-client
 
 所有权：`packages/engine-client`。

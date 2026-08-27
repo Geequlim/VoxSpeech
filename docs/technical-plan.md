@@ -76,6 +76,9 @@ engine 在一个进程中只持有一个模型 context。切换模型或空闲�
 - `config`：XDG 路径、YAML 解析、schema 迁移与原子持久化。
 - `core`：请求规范化、模型/Voice 兼容性、队列与生命周期规则。
 - `engine-client`：启动 engine、帧协议、流式 PCM、取消、退出和错误映射。
+- `model-downloader`（对外发布为 `@tinyaxis/model-downloader`）：多连接分块下载、
+  跨进程断点恢复、Hugging Face 端点/镜像与文件树发现、代理、校验与原子落盘，
+  同时提供 `model-downloader` CLI 与 npm API。
 - `daemon`：文件、网络、模型仓库、Voice 仓库、HTTP、RPC 与 systemd 运行时。
 - `cli`：用户输入输出、文件输出、stdin 与播放命令。
 
@@ -116,6 +119,13 @@ GUI 在未来只能调用同一 daemon 能力，不能形成第二套业务实�
 
 - HTTP 默认仅监听 `127.0.0.1`。
 - 模型必须在 SHA256 校验通过后原子进入可用目录。
+- Hugging Face 下载端点可配置，默认为 `https://huggingface.co`，可通过配置、
+  CLI `--hub-url` 或 `HF_ENDPOINT` 指向兼容镜像；显式配置优先。模型 catalog 只保存
+  repo/revision/path，不把镜像写死在模型条目中。
+- 下载支持显式代理和 `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` 环境变量；显式配置
+  优先，无代理时不改写请求。
+- 下载必须支持多连接 Range 分块和进程退出后恢复；同一目标同时只允许一个
+  写入者。
 - 配置和 Voice 元数据使用临时文件、fsync 与 rename 原子提交。
 - 下载支持中断恢复，但未完成文件不得被识别为模型。
 - 合成请求有明确大小限制、排队上限和取消语义。

@@ -8,6 +8,9 @@
 		"apps/*",
 		"packages/*"
 	],
+	"scripts": {
+		"model:download": "node native/engine/probe/download-models.ts"
+	},
 	"devDependencies": {
 		"@tinyaxis/toolkit": "0.3.0",
 		"@types/node": "24.13.3",

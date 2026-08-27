@@ -1,0 +1,62 @@
+{
+	"name": "@tinyaxis/model-downloader",
+	"version": "0.1.0",
+	"description": "Resumable and integrity-verified Hugging Face model downloader with CLI and API",
+	"keywords": [
+		"downloader",
+		"gguf",
+		"huggingface",
+		"model",
+		"resume",
+		"sha256"
+	],
+	"license": "Apache-2.0",
+	"author": "Geequlim <geequlim@gmail.com>",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/Geequlim/VoxSpeech.git",
+		"directory": "packages/model-downloader"
+	},
+	"bin": "./src/cli.ts",
+	"files": [
+		"dist",
+		"README.md",
+		"LICENSE"
+	],
+	"type": "module",
+	"sideEffects": false,
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"publishConfig": {
+		"bin": {
+			"model-downloader": "./dist/cli.js"
+		},
+		"main": "./dist/index.js",
+		"types": "./dist/index.d.ts",
+		"exports": {
+			".": {
+				"types": "./dist/index.d.ts",
+				"default": "./dist/index.js"
+			},
+			"./package.json": "./package.json"
+		},
+		"access": "public"
+	},
+	"scripts": {
+		"build": "tsc -p tsconfig.build.json",
+		"prepack": "tsc -p tsconfig.build.json",
+		"publish:npm": "node scripts/publish.mjs"
+	},
+	"dependencies": {
+		"commander": "15.0.0",
+		"easydl": "1.2.0",
+		"proxy-agent": "8.0.2"
+	},
+	"devDependencies": {
+		"typescript": "7.0.2"
+	},
+	"engines": {
+		"node": ">=24"
+	}
+}
