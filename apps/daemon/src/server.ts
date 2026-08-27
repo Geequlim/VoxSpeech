@@ -13,7 +13,8 @@ import {
 	type DaemonStatusResult,
 } from "@voxspeech/protocol";
 
-import { createFakeSynthesis, type FakeSynthesis } from "./fake-synthesis.js";
+import { createFakeSynthesis } from "./fake-synthesis.js";
+import { SynthesisServiceError, type SynthesisService } from "./synthesis-service.js";
 
 const VERSION = "0.1.0";
 const DAEMON_METHOD_SET = new Set<string>(DAEMON_METHODS);
@@ -27,7 +28,7 @@ interface RpcRequest {
 
 export interface DaemonServerOptions {
 	readonly socketPath: string;
-	readonly synthesis?: FakeSynthesis;
+	readonly synthesis?: SynthesisService;
 }
 
 export interface DaemonServer {
@@ -37,6 +38,7 @@ export interface DaemonServer {
 
 interface ActiveSynthesis {
 	readonly controller: AbortController;
+	completion?: Promise<void>;
 }
 
 type ActiveSyntheses = Map<Socket, Map<string, ActiveSynthesis>>;
@@ -45,10 +47,16 @@ export async function startDaemonServer(options: DaemonServerOptions): Promise<D
 	await prepareSocketPath(options.socketPath);
 	const synthesis = options.synthesis ?? createFakeSynthesis();
 	const active: ActiveSyntheses = new Map();
+	const activeTasks = new Set<ActiveSynthesis>();
 	const sockets = new Set<Socket>();
+	let closed = false;
 	const server = createServer((socket) => {
+		if (closed) {
+			socket.destroy();
+			return;
+		}
 		sockets.add(socket);
-		handleConnection(socket, synthesis, active);
+		handleConnection(socket, synthesis, active, activeTasks);
 		socket.once("close", () => {
 			sockets.delete(socket);
 			for (const task of active.get(socket)?.values() ?? [])
@@ -60,17 +68,18 @@ export async function startDaemonServer(options: DaemonServerOptions): Promise<D
 	await listen(server, options.socketPath);
 	await chmod(options.socketPath, 0o600);
 
-	let closed = false;
 	return {
 		socketPath: options.socketPath,
 		async close() {
 			if (closed) return;
 			closed = true;
+			const serverClosed = closeServer(server);
 			for (const tasks of active.values())
 				for (const task of tasks.values()) task.controller.abort(new Error("Daemon stopped"));
-			active.clear();
+			await Promise.allSettled([...activeTasks].map((task) => task.completion));
 			for (const socket of sockets) socket.destroy();
-			await closeServer(server);
+			await serverClosed;
+			await synthesis.close();
 			await unlink(options.socketPath).catch((error: unknown) => {
 				if (!isNodeError(error, "ENOENT")) throw error;
 			});
@@ -78,7 +87,12 @@ export async function startDaemonServer(options: DaemonServerOptions): Promise<D
 	};
 }
 
-function handleConnection(socket: Socket, synthesis: FakeSynthesis, active: ActiveSyntheses): void {
+function handleConnection(
+	socket: Socket,
+	synthesis: SynthesisService,
+	active: ActiveSyntheses,
+	activeTasks: Set<ActiveSynthesis>,
+): void {
 	const state = { initialized: false };
 	let buffer = Buffer.alloc(0);
 	let writes = Promise.resolve();
@@ -113,9 +127,11 @@ function handleConnection(socket: Socket, synthesis: FakeSynthesis, active: Acti
 				);
 				return;
 			}
-			void dispatchLine(line, socket, write, synthesis, active, state).then((result) => {
-				if (result === "close") socket.end();
-			});
+			void dispatchLine(line, socket, write, synthesis, active, activeTasks, state)
+				.then((result) => {
+					if (result === "close") socket.end();
+				})
+				.catch(() => socket.destroy());
 			newline = buffer.indexOf(0x0a);
 		}
 	});
@@ -125,8 +141,9 @@ async function dispatchLine(
 	line: Buffer,
 	socket: Socket,
 	write: (message: unknown) => Promise<void>,
-	synthesis: FakeSynthesis,
+	synthesis: SynthesisService,
 	active: ActiveSyntheses,
+	activeTasks: Set<ActiveSynthesis>,
 	state: { initialized: boolean },
 ): Promise<"close" | undefined> {
 	let value: unknown;
@@ -197,52 +214,44 @@ async function dispatchLine(
 	switch (request.method) {
 		case "daemon.status":
 			if (!isEmptyParams(request.params)) return void (await write(invalidParams(request.id)));
-			await write({ jsonrpc: JSON_RPC_VERSION, id: request.id, result: createStatus() });
+			await write({
+				jsonrpc: JSON_RPC_VERSION,
+				id: request.id,
+				result: await createStatus(synthesis),
+			});
 			return;
 		case "speech.synthesize": {
 			if (!isSynthesisParams(request.params)) return void (await write(invalidParams(request.id)));
+			if (request.params.voice) {
+				await write(
+					errorResponse(request.id, -32002, "Invalid state", {
+						code: "invalid_state",
+						details: "Voice profiles are not available during P2",
+						retryable: false,
+						stage: "speech.synthesize",
+					}),
+				);
+				return;
+			}
 			const tasks = active.get(socket) ?? new Map<string, ActiveSynthesis>();
 			active.set(socket, tasks);
 			if (tasks.has(request.id)) return void (await write(invalidParams(request.id)));
 			const controller = new AbortController();
-			tasks.set(request.id, { controller });
-			await write({
-				jsonrpc: JSON_RPC_VERSION,
-				method: "speech.started",
-				params: { requestId: request.id, ...synthesis.audio },
-			});
-			try {
-				const result = await synthesis.run(request.params, controller.signal, (chunk) => {
-					void write({
-						jsonrpc: JSON_RPC_VERSION,
-						method: "speech.audio",
-						params: {
-							data: chunk.data.toString("base64"),
-							requestId: request.id,
-							sequence: chunk.sequence,
-						},
-					});
-				});
-				await write({ jsonrpc: JSON_RPC_VERSION, id: request.id, result });
-			} catch (error) {
-				const cancelled = controller.signal.aborted;
-				await write(
-					errorResponse(
-						request.id,
-						cancelled ? -32005 : -32004,
-						cancelled ? "Request cancelled" : "Synthesis failed",
-						{
-							code: cancelled ? "request_cancelled" : "synthesis_failed",
-							details: error instanceof Error ? error.message : undefined,
-							retryable: !cancelled,
-							stage: "speech.synthesize",
-						},
-					),
-				);
-			} finally {
+			const task: ActiveSynthesis = { controller };
+			tasks.set(request.id, task);
+			activeTasks.add(task);
+			task.completion = runSynthesis(
+				request.id,
+				request.params,
+				controller,
+				write,
+				synthesis,
+			).finally(() => {
 				tasks.delete(request.id);
 				if (tasks.size === 0) active.delete(socket);
-			}
+				activeTasks.delete(task);
+			});
+			await task.completion;
 			return;
 		}
 		case "speech.cancel": {
@@ -262,14 +271,68 @@ async function dispatchLine(
 	}
 }
 
-function createStatus(): DaemonStatusResult {
+async function runSynthesis(
+	requestId: string,
+	params: DaemonSpeechSynthesizeParams,
+	controller: AbortController,
+	write: (message: unknown) => Promise<void>,
+	synthesis: SynthesisService,
+): Promise<void> {
+	await write({
+		jsonrpc: JSON_RPC_VERSION,
+		method: "speech.started",
+		params: { requestId, ...synthesis.audio },
+	});
+	try {
+		const result = await synthesis.run(params, controller.signal, (chunk) => {
+			void write({
+				jsonrpc: JSON_RPC_VERSION,
+				method: "speech.audio",
+				params: { data: chunk.data.toString("base64"), requestId, sequence: chunk.sequence },
+			});
+		});
+		await write({ jsonrpc: JSON_RPC_VERSION, id: requestId, result });
+	} catch (error) {
+		await write(synthesisErrorResponse(requestId, error, controller.signal.aborted));
+	}
+}
+
+async function createStatus(synthesis: SynthesisService): Promise<DaemonStatusResult> {
+	const engine = await synthesis.status().catch(() => ({
+		backend: null,
+		state: "stopped" as const,
+	}));
 	return {
 		api: { enabled: true, host: "127.0.0.1", port: 8080 },
 		daemon: { state: "ready", version: VERSION },
-		engine: { backend: null, modelId: null, state: "stopped" },
+		engine: { backend: engine.backend, modelId: null, state: engine.state },
 		model: { defaultId: null },
 		voice: { defaultId: null },
 	};
+}
+
+function synthesisErrorResponse(requestId: string, error: unknown, cancelled: boolean) {
+	if (cancelled)
+		return errorResponse(requestId, -32005, "Request cancelled", {
+			code: "request_cancelled",
+			details: error instanceof Error ? error.message : undefined,
+			retryable: false,
+			stage: "speech.synthesize",
+		});
+	const serviceError = error instanceof SynthesisServiceError ? error : undefined;
+	if (serviceError?.code === "invalid_state")
+		return errorResponse(requestId, -32002, "Invalid state", {
+			code: serviceError.code,
+			details: serviceError.message,
+			retryable: false,
+			stage: "speech.synthesize",
+		});
+	return errorResponse(requestId, -32004, "Synthesis failed", {
+		code: "synthesis_failed",
+		details: error instanceof Error ? error.message : undefined,
+		retryable: serviceError?.retryable ?? true,
+		stage: "speech.synthesize",
+	});
 }
 
 function parseRequest(value: unknown): RpcRequest | undefined {

@@ -1,10 +1,6 @@
-import {
-	PCM_CHANNELS,
-	PCM_ENCODING,
-	PCM_SAMPLE_RATE,
-	type DaemonSpeechSynthesizeParams,
-	type SpeechResult,
-} from "@voxspeech/protocol";
+import { PCM_CHANNELS, PCM_ENCODING, PCM_SAMPLE_RATE } from "@voxspeech/protocol";
+
+import type { SynthesisService } from "./synthesis-service.js";
 
 export interface FakeAudioChunk {
 	readonly data: Buffer;
@@ -16,18 +12,7 @@ export interface FakeSynthesisOptions {
 	readonly samplesPerCharacter?: number;
 }
 
-export interface FakeSynthesis {
-	readonly audio: {
-		readonly channels: typeof PCM_CHANNELS;
-		readonly encoding: typeof PCM_ENCODING;
-		readonly sampleRate: typeof PCM_SAMPLE_RATE;
-	};
-	run(
-		params: DaemonSpeechSynthesizeParams,
-		signal: AbortSignal,
-		onChunk: (chunk: FakeAudioChunk) => void,
-	): Promise<SpeechResult>;
-}
+export interface FakeSynthesis extends SynthesisService {}
 
 export function createFakeSynthesis(options: FakeSynthesisOptions = {}): FakeSynthesis {
 	const chunkDelayMs = options.chunkDelayMs ?? 1;
@@ -68,6 +53,10 @@ export function createFakeSynthesis(options: FakeSynthesisOptions = {}): FakeSyn
 				sampleCount,
 			};
 		},
+		async status() {
+			return { backend: null, state: "stopped" as const };
+		},
+		async close(): Promise<void> {},
 	};
 }
 
