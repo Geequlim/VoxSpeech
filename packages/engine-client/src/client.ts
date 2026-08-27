@@ -15,6 +15,7 @@ import {
 	EngineStatusResultSchema,
 	ErrorResponseSchema,
 	JSON_RPC_VERSION,
+	MAX_AUDIO_CHUNK_BYTES,
 	MAX_MESSAGE_BYTES,
 	PROTOCOL_VERSION,
 	SpeechCancelResultSchema,
@@ -85,7 +86,37 @@ interface JsonRpcResponse {
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 const DEFAULT_SHUTDOWN_TIMEOUT_MS = 5_000;
+const STDERR_TAIL_BYTES = 256 * 1024;
 const DEFAULT_CLIENT_INFO: PeerInfo = { name: "voxspeech-engine-client", version: "0.1.0" };
+
+const BASE64_VALUES = (() => {
+	const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+	const values = new Int8Array(128).fill(-1);
+	for (let index = 0; index < alphabet.length; index++) values[alphabet.charCodeAt(index)] = index;
+	return values;
+})();
+
+function decodeAudioChunk(data: string): Buffer | null {
+	if (data.length === 0 || data.length % 4 !== 0) return null;
+	let padding = 0;
+	while (padding < data.length && data[data.length - 1 - padding] === "=") padding++;
+	if (padding > 2) return null;
+	const dataEnd = data.length - padding;
+	for (let index = 0; index < dataEnd; index++) {
+		const code = data.charCodeAt(index);
+		if (code >= 128 || BASE64_VALUES[code] < 0) return null;
+	}
+	if (
+		padding > 0 &&
+		(BASE64_VALUES[data.charCodeAt(dataEnd - 1)] & (padding === 1 ? 0b11 : 0b1111)) !== 0
+	) {
+		return null;
+	}
+	const decoded = Buffer.from(data, "base64");
+	if (decoded.length !== (data.length / 4) * 3 - padding) return null;
+	if (decoded.length % 2 !== 0 || decoded.length > MAX_AUDIO_CHUNK_BYTES) return null;
+	return decoded;
+}
 
 export class EngineClient {
 	readonly #child: ChildProcessWithoutNullStreams;
@@ -95,6 +126,7 @@ export class EngineClient {
 	readonly #pending = new Map<string, PendingRequest>();
 	readonly #synthesisStreams = new Map<string, SynthesisStream>();
 	readonly #decoder = new StringDecoder("utf8");
+	readonly #stderrDecoder = new StringDecoder("utf8");
 	#stdoutBuffer = "";
 	#stderr = "";
 	#nextRequestId = 1;
@@ -109,11 +141,16 @@ export class EngineClient {
 
 		child.stdout.on("data", (chunk: Buffer) => this.#receiveStdout(chunk));
 		child.stderr.on("data", (chunk: Buffer) => this.#receiveStderr(chunk));
+		child.stdout.on("error", (error) =>
+			this.#abortSession(new EngineClientError("Engine stdout stream failed", { cause: error })),
+		);
+		child.stderr.on("error", (error) =>
+			this.#abortSession(new EngineClientError("Engine stderr stream failed", { cause: error })),
+		);
 		child.stdin.on("error", (error) => {
-			if (this.#closed) return;
-			this.#closed = true;
-			child.kill("SIGTERM");
-			this.#fail(new EngineClientError("Failed to write to engine stdin", { cause: error }));
+			this.#abortSession(
+				new EngineClientError("Failed to write to engine stdin", { cause: error }),
+			);
 		});
 		child.once("error", (error) => {
 			this.#closed = true;
@@ -214,44 +251,38 @@ export class EngineClient {
 			throw error;
 		}
 		this.#child.stdin.end();
-		if (this.#closed) {
-			await this.#terminate();
-			return;
-		}
-
-		try {
-			await new Promise<void>((resolve, reject) => {
-				const timer = setTimeout(() => {
-					reject(new EngineTimeoutError("engine-exit", this.#shutdownTimeoutMs));
-				}, this.#shutdownTimeoutMs);
-				this.#child.once("close", () => {
-					clearTimeout(timer);
-					resolve();
-				});
-			});
-		} catch (error) {
-			await this.#terminate();
-			throw error;
-		}
+		await this.#observeCloseWithEscalation();
 	}
 
 	async #terminate(): Promise<void> {
 		if (this.#closed && (this.#child.exitCode !== null || this.#child.signalCode !== null)) {
 			return;
 		}
-
 		await new Promise<void>((resolve) => {
-			let forceTimer: NodeJS.Timeout | undefined;
-			const timer = setTimeout(() => {
-				this.#child.kill("SIGKILL");
-				forceTimer = setTimeout(resolve, this.#shutdownTimeoutMs);
-			}, this.#shutdownTimeoutMs);
+			const killTimer = setTimeout(() => this.#child.kill("SIGKILL"), this.#shutdownTimeoutMs);
 			this.#child.once("close", () => {
-				clearTimeout(timer);
-				if (forceTimer) clearTimeout(forceTimer);
+				clearTimeout(killTimer);
 				resolve();
 			});
 			this.#child.kill("SIGTERM");
+		});
+	}
+
+	#observeCloseWithEscalation(): Promise<void> {
+		if (this.#closed && (this.#child.exitCode !== null || this.#child.signalCode !== null)) {
+			return Promise.resolve();
+		}
+		return new Promise((resolve) => {
+			let killTimer: NodeJS.Timeout | undefined;
+			const sigtermTimer = setTimeout(() => {
+				this.#child.kill("SIGTERM");
+				killTimer = setTimeout(() => this.#child.kill("SIGKILL"), this.#shutdownTimeoutMs);
+			}, this.#shutdownTimeoutMs);
+			this.#child.once("close", () => {
+				clearTimeout(sigtermTimer);
+				if (killTimer) clearTimeout(killTimer);
+				resolve();
+			});
 		});
 	}
 
@@ -303,6 +334,7 @@ export class EngineClient {
 			if (pending) {
 				clearTimeout(pending.timer);
 				this.#pending.delete(requestId);
+				this.#synthesisStreams.delete(requestId);
 				pending.reject(error instanceof Error ? error : new EngineClientError(String(error)));
 			}
 		}
@@ -347,8 +379,15 @@ export class EngineClient {
 	}
 
 	#receiveStderr(chunk: Buffer): void {
-		const text = chunk.toString("utf8");
+		const text = this.#stderrDecoder.write(chunk);
+		if (!text) return;
 		this.#stderr += text;
+		if (Buffer.byteLength(this.#stderr, "utf8") > STDERR_TAIL_BYTES) {
+			const bytes = Buffer.from(this.#stderr, "utf8");
+			let start = bytes.length - STDERR_TAIL_BYTES;
+			while ((bytes[start] & 0xc0) === 0x80) start++;
+			this.#stderr = bytes.subarray(start).toString("utf8");
+		}
 		this.#onStderr?.(text);
 	}
 
@@ -383,13 +422,17 @@ export class EngineClient {
 		}
 
 		const pending = this.#pending.get(response.id);
-		if (!pending) return;
+		if (!pending) {
+			this.#protocolFailure("Engine returned a response with an unexpected request ID");
+			return;
+		}
 
 		if ("error" in response) {
 			if (!Value.Check(ErrorResponseSchema, message)) {
 				this.#protocolFailure("Engine returned an invalid error response");
 				return;
 			}
+			this.#synthesisStreams.delete(response.id);
 			clearTimeout(pending.timer);
 			this.#pending.delete(response.id);
 			pending.reject(new EngineRpcError(response.id, message.error));
@@ -405,6 +448,7 @@ export class EngineClient {
 			this.#protocolFailure("Engine completed synthesis before speech.started");
 			return;
 		}
+		this.#synthesisStreams.delete(response.id);
 		clearTimeout(pending.timer);
 		this.#pending.delete(response.id);
 		pending.resolve(response.result);
@@ -435,14 +479,26 @@ export class EngineClient {
 			this.#protocolFailure("Engine returned speech.audio out of order");
 			return;
 		}
+		const audio = decodeAudioChunk(params.data);
+		if (!audio) {
+			this.#protocolFailure("Engine sent an audio chunk that is not canonical Base64 PCM");
+			return;
+		}
 		stream.nextSequence++;
-		stream.handlers.onAudio?.(Buffer.from(params.data, "base64"), params);
+		stream.handlers.onAudio?.(audio, params);
 	}
 
 	#protocolFailure(message: string, cause?: unknown): void {
-		const error = new EngineProtocolError(message, cause instanceof Error ? { cause } : undefined);
-		this.#closed = true;
-		this.#child.kill("SIGTERM");
+		this.#abortSession(
+			new EngineProtocolError(message, cause instanceof Error ? { cause } : undefined),
+		);
+	}
+
+	#abortSession(error: Error): void {
+		if (!this.#closed) {
+			this.#closed = true;
+			void this.#terminate();
+		}
 		this.#fail(error);
 	}
 
