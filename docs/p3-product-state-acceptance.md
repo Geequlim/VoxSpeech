@@ -2,7 +2,7 @@
 
 > 日期：2026-08-28
 >
-> 状态：实现完成，等待用户验收
+> 状态：实现完成；1.7B 通过，0.6B 真实试听失败，P3 尚未通过最终验收
 
 ## 1. 交付结果
 
@@ -63,8 +63,8 @@ yarn tiny check
 ```
 
 最终结果：TypeScript 类型检查、Oxlint、Oxfmt 全部通过；Vitest 为 173 passed、2 个显式环境门
-测试 skipped；C++ `ctest` 为 4/4 passed。两个被环境门跳过的真实测试随后分别用本机参数显式
-执行并通过。
+测试 skipped；C++ `ctest` 为 4/4 passed。真实 1.7B 测试通过；0.6B 可以完成协议和文件流程，
+但没有生成 EOS，且人工试听为纯噪音，因此真实验收失败。
 
 ## 4. 真实 Vulkan 产品流程
 
@@ -78,12 +78,16 @@ Voice clone 输入使用仓库内 `apps/daemon/test/fixtures/voice-brief/` 的�
 逐字稿。两组真实模型测试都会依次提取全部五个 Voice，1.7B 使用甜妹助理完成合成，0.6B 使用
 知性姐姐完成合成。
 
-| 模型             | 后端   | 完整测试耗时 |            输出 | 结果 |
-| ---------------- | ------ | -----------: | --------------: | ---- |
-| 1.7B Base Q4_K_M | Vulkan |       9.49 s |   119,084 bytes | 通过 |
-| 0.6B Base Q4_K_M | Vulkan |      46.79 s | 7,864,364 bytes | 通过 |
+| 模型             | 后端   | 输出时长 |        输出大小 | 结果 |
+| ---------------- | ------ | -------: | --------------: | ---- |
+| 1.7B Base Q4_K_M | Vulkan |   2.48 s |   119,084 bytes | 通过 |
+| 0.6B Base Q4_K_M | Vulkan | 163.84 s | 7,864,364 bytes | 失败 |
 
-两份文件均由 `file` 确认为 RIFF/WAVE、PCM 16-bit、mono、24 kHz。测试同时验证：
+两份文件均由 `file` 确认为 RIFF/WAVE、PCM 16-bit、mono、24 kHz。1.7B 输出为 2.48 秒且试听
+内容正确。0.6B 输出为 163.84 秒，恰好等于 2048 个 80 ms frame，说明模型没有生成 EOS，最终
+触发 `max_new_tokens`；人工试听确认为纯噪音。文件格式检查不能作为语音质量验收。
+
+真实测试现已增加 30 秒上限，短句输出达到最大 frame 上限时会直接失败。测试同时验证：
 
 - setup/install/use 后重启可加载真实模型；
 - 五组纯中文人设样本逐一完成真实 Voice latent 提取；
@@ -95,4 +99,4 @@ Voice clone 输入使用仓库内 `apps/daemon/test/fixtures/voice-brief/` 的�
 P3 不包含 HTTP API、请求队列、idle unload、engine 自动恢复、systemd 或发行包。开发态入口为
 `yarn tiny cli` 与 `yarn tiny daemon`；正式安装命令和系统服务属于后续打包阶段。
 
-本报告完成后停止推进，不进入 P4，等待用户验收。
+当前停止推进，不进入 P4。后续需要决定暂时下架 0.6B，或继续调查其 GGUF/量化与上游 Runtime。

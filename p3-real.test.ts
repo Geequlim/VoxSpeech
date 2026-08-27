@@ -28,6 +28,7 @@ const voiceFixtureIds = ["neighbor", "default", "sweet", "energetic", "thoughtfu
 const selectedVoiceId =
 	process.env.VOXSPEECH_P3_VOICE_FIXTURE ??
 	(modelId === "qwen3-tts-0.6b-base-q4_k_m" ? "thoughtful" : "sweet");
+const maximumAcceptanceWavBytes = 30 * 24_000 * 2 + 4_096;
 const enabled = Boolean(engineCommand && talkerPath && tokenizerPath && backend);
 const directories: string[] = [];
 
@@ -100,7 +101,7 @@ describe.skipIf(!enabled)("P3 real product acceptance", () => {
 		await runCli(["voice", "use", selectedVoiceId], paths.socketFile, { output: discard() });
 		const outputPath = process.env.VOXSPEECH_P3_OUTPUT ?? path.join(root, "p3-real.wav");
 		await runCli(["speak", "产品流程已经接通。", "--output", outputPath], paths.socketFile);
-		expect((await readFile(outputPath)).subarray(0, 4).toString("ascii")).toBe("RIFF");
+		assertAcceptanceWav(await readFile(outputPath));
 		await expect(
 			runCli(["model", "remove", modelId], paths.socketFile, {
 				output: discard(),
@@ -111,14 +112,18 @@ describe.skipIf(!enabled)("P3 real product acceptance", () => {
 		daemon = await startProductDaemon(options);
 		try {
 			await runCli(["speak", "重启后默认音色仍然有效。", "--output", outputPath], paths.socketFile);
-			const wav = await readFile(outputPath);
-			expect(wav.subarray(0, 4).toString("ascii")).toBe("RIFF");
-			expect(wav.byteLength).toBeGreaterThan(44);
+			assertAcceptanceWav(await readFile(outputPath));
 		} finally {
 			await daemon.close();
 		}
 	}, 300_000);
 });
+
+function assertAcceptanceWav(wav: Buffer): void {
+	expect(wav.subarray(0, 4).toString("ascii")).toBe("RIFF");
+	expect(wav.byteLength).toBeGreaterThan(44);
+	expect(wav.byteLength).toBeLessThanOrEqual(maximumAcceptanceWavBytes);
+}
 
 function createLocalDownload(
 	files: Readonly<Record<string, string>>,
