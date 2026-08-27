@@ -29,16 +29,16 @@ const QWEN3_TTS_17B_BASE_Q4_K_M: ModelCatalogEntry = {
 	tokenizer: "qwen-tokenizer-12hz-Q4_K_M.gguf",
 };
 
-const QWEN3_TTS_06B_BASE_Q4_K_M: ModelCatalogEntry = {
-	id: "qwen3-tts-0.6b-base-q4_k_m",
+const QWEN3_TTS_06B_BASE_Q8_0: ModelCatalogEntry = {
+	id: "qwen3-tts-0.6b-base-q8_0",
 	manifest: {
 		repository: "Serveurperso/Qwen3-TTS-GGUF",
 		revision: "e0f336a048a3de02b29b8ad92969217d9ecffe3e",
 		files: [
 			{
-				name: "qwen-talker-0.6b-base-Q4_K_M.gguf",
-				size: 628_905_056,
-				sha256: "4b468ec7b1f62b90ef4ca316c0aa57deadfd54b2cf9651703ea753cedaf04226",
+				name: "qwen-talker-0.6b-base-Q8_0.gguf",
+				size: 992_615_488,
+				sha256: "d54dbaf10591421fa764ed630d764efa717ae40cd959bd48c66d4eb1af226426",
 			},
 			{
 				name: "qwen-tokenizer-12hz-Q4_K_M.gguf",
@@ -47,13 +47,13 @@ const QWEN3_TTS_06B_BASE_Q4_K_M: ModelCatalogEntry = {
 			},
 		],
 	},
-	talker: "qwen-talker-0.6b-base-Q4_K_M.gguf",
+	talker: "qwen-talker-0.6b-base-Q8_0.gguf",
 	tokenizer: "qwen-tokenizer-12hz-Q4_K_M.gguf",
 };
 
 export const MODEL_CATALOG: readonly ModelCatalogEntry[] = [
 	QWEN3_TTS_17B_BASE_Q4_K_M,
-	QWEN3_TTS_06B_BASE_Q4_K_M,
+	QWEN3_TTS_06B_BASE_Q8_0,
 ];
 
 export function findCatalogModel(id: string): ModelCatalogEntry | undefined {

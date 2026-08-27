@@ -27,7 +27,7 @@ const voiceFixtureDirectory = fileURLToPath(
 const voiceFixtureIds = ["neighbor", "default", "sweet", "energetic", "thoughtful"] as const;
 const selectedVoiceId =
 	process.env.VOXSPEECH_P3_VOICE_FIXTURE ??
-	(modelId === "qwen3-tts-0.6b-base-q4_k_m" ? "thoughtful" : "sweet");
+	(modelId === "qwen3-tts-0.6b-base-q8_0" ? "thoughtful" : "sweet");
 const maximumAcceptanceWavBytes = 30 * 24_000 * 2 + 4_096;
 const enabled = Boolean(engineCommand && talkerPath && tokenizerPath && backend);
 const directories: string[] = [];

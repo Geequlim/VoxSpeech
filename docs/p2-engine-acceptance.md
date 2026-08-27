@@ -6,6 +6,9 @@
 >
 > 契约：`docs/decisions/p2-engine-integration.md`
 
+> 纠正：0.6B Q4_K_M 的 P2 验证只覆盖有限 frame 与 WAV 格式，没有完成有效语音试听。
+> 后续发现其 Vulkan 输出为纯噪音并缺失 EOS；P3 已改用 0.6B Q8_0。
+
 ## 1. 已交付链路
 
 ```text

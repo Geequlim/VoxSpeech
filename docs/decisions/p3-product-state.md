@@ -55,12 +55,22 @@ fsync、rename 与 parent directory fsync。`config.validate` 只校验；`confi
 
 ## 4. 模型契约
 
-P3 内置 catalog 包含已验收的 1.7B 与 0.6B Base Q4_K_M；`setup` 固定安装并启用
+P3 内置 catalog 包含 1.7B Base Q4_K_M 与 0.6B Base Q8_0；`setup` 固定安装并启用
 `qwen3-tts-1.7b-base-q4_k_m`。两个条目固定：
 
 - repository `Serveurperso/Qwen3-TTS-GGUF`；
 - revision `e0f336a048a3de02b29b8ad92969217d9ecffe3e`；
-- talker 与 tokenizer 的路径、size、SHA256 使用 P1 固定值。
+- 每个 talker 与 tokenizer 的路径、size、SHA256 固定在 catalog 中。
+
+0.6B 最初使用的 Q4_K_M talker 在 Vulkan 中文试听中产生纯噪音，且连续生成 2048 frame 后才
+因 `max_new_tokens` 停止。相同 Q4_K_M 文件在 CPU 能正常生成 EOS，禁用 Vulkan Flash
+Attention 或使用回归前 Runtime 均不能恢复；相同 Runtime、Vulkan 后端、Q4_K_M tokenizer 和
+Voice Reference 下，Q8_0 talker 能正常生成 EOS。因此 0.6B catalog 改为
+`qwen3-tts-0.6b-base-q8_0`：
+
+- `qwen-talker-0.6b-base-Q8_0.gguf`；
+- size `992615488`；
+- SHA256 `d54dbaf10591421fa764ed630d764efa717ae40cd959bd48c66d4eb1af226426`。
 
 安装使用 `@tinyaxis/model-downloader` 的 manifest API，不重新实现网络传输。下载目录为
 `<cache>/downloads/<id>.staging`，允许跨重启续传。cache 与 data 同文件系统时，完整校验并写入
