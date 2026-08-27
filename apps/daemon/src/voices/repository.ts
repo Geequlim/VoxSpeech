@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { chmod, lstat, mkdir, open, readdir, readFile, rename, rm } from "node:fs/promises";
 import path from "node:path";
 
@@ -7,7 +7,7 @@ import { parse, stringify } from "yaml";
 
 const PROFILE_FILES = new Set(["voice.yaml", "speaker.spk", "reference.rvq"]);
 const PRIVATE_MODE = 0o600;
-const VOICE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
+const STORAGE_KEY_PREFIX = "voice-";
 
 export interface VoiceMetadata {
 	readonly version: 1;
@@ -73,7 +73,7 @@ export class VoiceRepository {
 			const profiles = await Promise.all(
 				entries
 					.filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
-					.map((entry) => this.read(entry.name)),
+					.map((entry) => readProfile(path.join(this.#voicesDirectory, entry.name))),
 			);
 			return profiles.filter((profile): profile is VoiceProfileRecord => profile !== undefined);
 		} catch (error) {
@@ -84,7 +84,10 @@ export class VoiceRepository {
 
 	public async read(id: string): Promise<VoiceProfileRecord | undefined> {
 		if (!isVoiceId(id)) return undefined;
-		return readProfile(path.join(this.#voicesDirectory, id), id);
+		const profile = await readProfile(this.#directory(id), id);
+		if (profile) return profile;
+		const legacy = this.#legacyDirectory(id);
+		return legacy ? readProfile(legacy, id) : undefined;
 	}
 
 	public async resolve(id: string): Promise<VoiceProfileRecord> {
@@ -96,7 +99,9 @@ export class VoiceRepository {
 
 	public async remove(id: string): Promise<void> {
 		assertVoiceId(id);
-		await rm(path.join(this.#voicesDirectory, id), { force: true, recursive: true });
+		await rm(this.#directory(id), { force: true, recursive: true });
+		const legacy = this.#legacyDirectory(id);
+		if (legacy) await rm(legacy, { force: true, recursive: true });
 		await syncDirectory(this.#voicesDirectory);
 	}
 
@@ -112,15 +117,10 @@ export class VoiceRepository {
 			throw new Error("Voice clone transcript must not be empty");
 		if (!isNonEmptyString(request.modelId))
 			throw new Error("Voice clone model ID must not be empty");
-		if (await this.read(request.id)) throw new Error(`Voice profile already exists: ${request.id}`);
-
 		await mkdir(this.#voicesDirectory, { recursive: true, mode: 0o700 });
-		const staging = path.join(this.#voicesDirectory, `.${request.id}.${this.#createId()}.staging`);
-		const destination = path.join(this.#voicesDirectory, request.id);
-		const displaced = path.join(
-			this.#voicesDirectory,
-			`.${request.id}.${this.#createId()}.replaced`,
-		);
+		const staging = path.join(this.#voicesDirectory, `.${this.#createId()}.staging`);
+		const destination = this.#directory(request.id);
+		const displaced = path.join(this.#voicesDirectory, `.${this.#createId()}.replaced`);
 		let committed = false;
 		let displacedExisting = false;
 		try {
@@ -167,10 +167,28 @@ export class VoiceRepository {
 			committed = true;
 			await syncDirectory(this.#voicesDirectory);
 			if (displacedExisting) await rm(displaced, { force: true, recursive: true });
+			const legacy = this.#legacyDirectory(request.id);
+			if (legacy) await rm(legacy, { force: true, recursive: true });
 			return await this.resolve(request.id);
 		} finally {
 			if (!committed) await rm(staging, { force: true, recursive: true });
 		}
+	}
+
+	#directory(id: string): string {
+		return path.join(this.#voicesDirectory, storageKey(id));
+	}
+
+	#legacyDirectory(id: string): string | undefined {
+		if (
+			id === "." ||
+			id === ".." ||
+			id.includes("/") ||
+			id.includes("\0") ||
+			Buffer.byteLength(id, "utf8") > 255
+		)
+			return undefined;
+		return path.join(this.#voicesDirectory, id);
 	}
 
 	#serialClone<T>(id: string, operation: () => Promise<T>): Promise<T> {
@@ -187,7 +205,7 @@ export class VoiceRepository {
 }
 
 export function isVoiceId(value: string): boolean {
-	return VOICE_ID_PATTERN.test(value) && value !== "." && value !== "..";
+	return value.length > 0;
 }
 
 export function assertVoiceId(value: string): void {
@@ -196,7 +214,7 @@ export function assertVoiceId(value: string): void {
 
 async function readProfile(
 	directory: string,
-	expectedId: string,
+	expectedId?: string,
 ): Promise<VoiceProfileRecord | undefined> {
 	try {
 		const directoryStat = await lstat(directory);
@@ -225,7 +243,7 @@ async function readProfile(
 	}
 }
 
-async function readMetadata(file: string, expectedId: string): Promise<VoiceMetadata | undefined> {
+async function readMetadata(file: string, expectedId?: string): Promise<VoiceMetadata | undefined> {
 	try {
 		return parseVoiceMetadata(
 			parse(await readFile(file, "utf8"), { uniqueKeys: true }),
@@ -236,12 +254,12 @@ async function readMetadata(file: string, expectedId: string): Promise<VoiceMeta
 	}
 }
 
-function parseVoiceMetadata(value: unknown, expectedId: string): VoiceMetadata | undefined {
+function parseVoiceMetadata(value: unknown, expectedId?: string): VoiceMetadata | undefined {
 	if (!isPlainObject(value) || !isVoiceMetadata(value, expectedId)) return undefined;
 	return value;
 }
 
-function isVoiceMetadata(value: unknown, expectedId: string): value is VoiceMetadata {
+function isVoiceMetadata(value: unknown, expectedId?: string): value is VoiceMetadata {
 	if (!isPlainObject(value)) return false;
 	const keys = Object.keys(value);
 	if (
@@ -262,7 +280,8 @@ function isVoiceMetadata(value: unknown, expectedId: string): value is VoiceMeta
 		return false;
 	return (
 		value.version === 1 &&
-		value.id === expectedId &&
+		(expectedId === undefined || value.id === expectedId) &&
+		typeof value.id === "string" &&
 		isVoiceId(value.id) &&
 		isNonEmptyString(value.transcript) &&
 		isNonEmptyString(value.modelId) &&
@@ -270,6 +289,10 @@ function isVoiceMetadata(value: unknown, expectedId: string): value is VoiceMeta
 		isPositiveInteger(value.codebookCount) &&
 		isPositiveInteger(value.frameCount)
 	);
+}
+
+function storageKey(id: string): string {
+	return `${STORAGE_KEY_PREFIX}${createHash("sha256").update(id, "utf8").digest("hex")}`;
 }
 
 async function writeMetadata(file: string, metadata: VoiceMetadata): Promise<void> {

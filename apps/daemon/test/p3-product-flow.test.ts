@@ -96,11 +96,14 @@ describe("P3 product flow", () => {
 			.split("\n")
 			.map((line) => JSON.parse(line) as { method: string; params: Record<string, unknown> });
 		const synthesis = messages.filter(({ method }) => method === "speech.synthesize").at(-1);
-		expect(synthesis?.params.reference).toEqual({
-			codesPath: path.join(paths.voicesDirectory, "assistant", "reference.rvq"),
-			speakerPath: path.join(paths.voicesDirectory, "assistant", "speaker.spk"),
-			text: "这是参考文本",
-		});
+		const reference = synthesis?.params.reference as
+			| { codesPath: string; speakerPath: string; text: string }
+			| undefined;
+		expect(reference?.text).toBe("这是参考文本");
+		expect(path.dirname(reference!.codesPath)).toBe(path.dirname(reference!.speakerPath));
+		expect(path.basename(path.dirname(reference!.codesPath))).toMatch(/^voice-[a-f0-9]{64}$/);
+		expect(path.basename(reference!.codesPath)).toBe("reference.rvq");
+		expect(path.basename(reference!.speakerPath)).toBe("speaker.spk");
 	});
 });
 

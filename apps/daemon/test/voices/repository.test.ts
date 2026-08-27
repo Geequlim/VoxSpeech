@@ -34,20 +34,33 @@ describe("VoiceRepository", () => {
 			modelId: "base-model",
 			version: 1,
 		});
+		expect(path.basename(profile.directory)).toMatch(/^voice-[a-f0-9]{64}$/);
 		expect(profile.reference).toEqual({
-			speakerPath: path.join(root, "data", "voices", "assistant", "speaker.spk"),
-			codesPath: path.join(root, "data", "voices", "assistant", "reference.rvq"),
+			speakerPath: path.join(profile.directory, "speaker.spk"),
+			codesPath: path.join(profile.directory, "reference.rvq"),
 			text: "这是参考音频",
 		});
-		expect(
-			await readFile(path.join(root, "data", "voices", "assistant", "voice.yaml"), "utf8"),
-		).toContain("modelId: base-model");
+		expect(await readFile(path.join(profile.directory, "voice.yaml"), "utf8")).toContain(
+			"modelId: base-model",
+		);
 		expect((await stat(profile.reference.speakerPath)).mode & 0o777).toBe(0o600);
 		expect((await stat(profile.reference.codesPath)).mode & 0o777).toBe(0o600);
 
 		const restarted = createRepository(root);
 		expect(await restarted.list()).toHaveLength(1);
 		expect((await restarted.resolve("assistant")).reference).toEqual(profile.reference);
+	});
+
+	it("stores arbitrary user-entered names without interpreting them as paths", async () => {
+		const root = await temporaryDirectory();
+		const repository = createRepository(root);
+		const request = { ...cloneRequest(), id: " ../甜妹 助理 / Dr. 小鱼 👩‍💻\n" };
+
+		const profile = await repository.clone(request, createExtractor());
+
+		expect((await createRepository(root).resolve(request.id)).metadata.id).toBe(request.id);
+		expect(profile.directory.startsWith(path.join(root, "data", "voices"))).toBe(true);
+		expect(path.basename(profile.directory)).toMatch(/^voice-[a-f0-9]{64}$/);
 	});
 
 	it("hides corrupt and staging directories from list and show", async () => {
@@ -125,13 +138,11 @@ describe("VoiceRepository", () => {
 		expect(await repository.list()).toEqual([]);
 	});
 
-	it("rejects unsafe IDs", async () => {
+	it("only rejects an empty ID that cannot identify a profile", async () => {
 		const repository = createRepository(await temporaryDirectory());
-		for (const id of [".", "..", "../voice", "nested/voice", "voice name", ""]) {
-			expect(() => repository.clone({ ...cloneRequest(), id }, createExtractor())).toThrow(
-				"Invalid voice ID",
-			);
-		}
+		expect(() => repository.clone({ ...cloneRequest(), id: "" }, createExtractor())).toThrow(
+			"Invalid voice ID",
+		);
 	});
 });
 
@@ -139,7 +150,8 @@ describe("VoiceManager", () => {
 	it("uses the configured default and resolves it to reference paths and transcript", async () => {
 		const root = await temporaryDirectory();
 		let defaultVoice: string | null = null;
-		const manager = createManager(createRepository(root), {
+		const repository = createRepository(root);
+		const manager = createManager(repository, {
 			getDefaultVoice: async () => defaultVoice,
 			setDefaultVoice: async (id) => {
 				defaultVoice = id;
@@ -158,11 +170,7 @@ describe("VoiceManager", () => {
 		]);
 
 		const lease = await manager.acquireReference();
-		expect(lease?.reference).toEqual({
-			speakerPath: path.join(root, "data", "voices", "assistant", "speaker.spk"),
-			codesPath: path.join(root, "data", "voices", "assistant", "reference.rvq"),
-			text: "这是参考音频",
-		});
+		expect(lease?.reference).toEqual((await repository.resolve("assistant")).reference);
 		lease?.release();
 	});
 
@@ -212,7 +220,7 @@ describe("VoiceManager", () => {
 		await removal;
 	});
 
-	it("serializes same-ID clones and releases the Base provider on failure", async () => {
+	it("serializes same-ID upserts and keeps the latest user data", async () => {
 		const root = await temporaryDirectory();
 		let active = 0;
 		let peak = 0;
@@ -243,10 +251,10 @@ describe("VoiceManager", () => {
 			manager.clone({ id: "assistant", audioPath: "/tmp/reference.wav", transcript: "第二条" }),
 		]);
 
-		expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
-		expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
+		expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(2);
 		expect(peak).toBe(1);
 		expect(releases).toBe(2);
+		expect((await manager.show("assistant"))?.transcript).toBe("第二条");
 	});
 });
 

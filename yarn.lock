@@ -4225,6 +4225,7 @@ __metadata:
   dependencies:
     "@tinyaxis/toolkit": "npm:0.3.0"
     "@types/node": "npm:24.13.3"
+    commander: "npm:15.0.0"
     oxfmt: "npm:0.59.0"
     oxlint: "npm:1.70.0"
     oxlint-tsgolint: "npm:0.23.0"

@@ -92,7 +92,7 @@ model.install 显式参数
 
 ## 5. Voice Profile 契约
 
-Profile 位于 `<data>/voices/<id>/`，只包含：
+Profile 位于 `<data>/voices/voice-<sha256(id)>/`，只包含：
 
 ```text
 voice.yaml
@@ -101,11 +101,14 @@ reference.rvq
 ```
 
 `voice.yaml` 是 daemon 私有 schema：version、id、transcript、modelId、speakerDimension、
-codebookCount、frameCount。Voice ID 必须是安全的单个目录名，不允许斜杠、`.`、`..`。
+codebookCount、frameCount。用户输入的 Voice ID 只作为数据保存在 metadata 中，不解释成路径；
+内部目录使用完整 ID 的 SHA-256。旧版 `<data>/voices/<id>/` 安全目录继续可读，并在下次 clone
+成功后迁移。
 
-clone 在 voices 根目录的同文件系统 staging 目录执行。daemon 把临时 `.spk/.rvq` 路径交给
+clone 是原子 upsert，在 voices 根目录的同文件系统 staging 目录执行。daemon 把临时
+`.spk/.rvq` 路径交给
 已加载 Base engine 的 `voice.extract`，校验两个输出为非空 regular file、权限为私有并写入
-metadata；全部 fsync 后原子 rename 成最终 Profile。失败清理 staging，不产生可见 Profile。
+metadata；全部 fsync 后原子替换最终 Profile。失败清理 staging 并保留上一个可见 Profile。
 
 合成时 Voice ID 解析为固定 reference path 与 transcript，绝不把 ID 当文件路径。一次请求
 持有 Profile 租约直到 engine 返回；活动 Profile 拒绝删除。未显式传 Voice 时使用配置默认

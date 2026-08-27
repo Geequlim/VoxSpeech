@@ -12,9 +12,7 @@ implementing the VoxSpeech JSON-RPC engine. It verifies:
 ## Fetch the pinned models
 
 ```bash
-yarn model:download \
-	native/engine/probe/model-manifest.json \
-	--output-dir /tmp/voxspeech-p1-models
+yarn tiny native/models
 ```
 
 This helper (`native/engine/probe/download-models.ts`) pins exact revisions and
@@ -30,9 +28,7 @@ the environment for this command.
 
 ```bash
 HF_ENDPOINT=https://hf-mirror.example \
-	yarn model:download \
-	native/engine/probe/model-manifest.json \
-	--output-dir /tmp/voxspeech-p1-models \
+	yarn tiny native/models -- \
 	--connections 8
 ```
 
@@ -46,8 +42,8 @@ cmake -S native/third_party/qwentts.cpp -B /tmp/voxspeech-qwentts-cpu -G Ninja \
 	-DCMAKE_PROJECT_INCLUDE="$PWD/native/engine/probe/inject.cmake"
 cmake --build /tmp/voxspeech-qwentts-cpu --target voxspeech-native-probe test-abi-c
 /tmp/voxspeech-qwentts-cpu/voxspeech-probe/voxspeech-native-probe \
-	--model /tmp/voxspeech-p1-models/qwen-talker-1.7b-base-Q4_K_M.gguf \
-	--codec /tmp/voxspeech-p1-models/qwen-tokenizer-12hz-Q4_K_M.gguf \
+	--model .cache/voxspeech/models/qwen-talker-1.7b-base-Q4_K_M.gguf \
+	--codec .cache/voxspeech/models/qwen-tokenizer-12hz-Q4_K_M.gguf \
 	--ref-wav native/third_party/qwentts.cpp/examples/freeman.wav \
 	--ref-text "This is the voice of the great Freeman." \
 	--output-dir /tmp/voxspeech-p1-probe
@@ -77,8 +73,8 @@ select one explicitly for repeatable measurements:
 ```bash
 GGML_BACKEND=Vulkan0 \
 	/tmp/voxspeech-qwentts-vulkan-static/voxspeech-probe/voxspeech-native-probe \
-	--model /tmp/voxspeech-p1-models/qwen-talker-1.7b-base-Q4_K_M.gguf \
-	--codec /tmp/voxspeech-p1-models/qwen-tokenizer-12hz-Q4_K_M.gguf \
+	--model .cache/voxspeech/models/qwen-talker-1.7b-base-Q4_K_M.gguf \
+	--codec .cache/voxspeech/models/qwen-tokenizer-12hz-Q4_K_M.gguf \
 	--ref-wav native/third_party/qwentts.cpp/examples/freeman.wav \
 	--ref-text "This is the voice of the great Freeman." \
 	--output-dir /tmp/voxspeech-p1-probe-vulkan

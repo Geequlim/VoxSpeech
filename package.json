@@ -11,6 +11,7 @@
 	"devDependencies": {
 		"@tinyaxis/toolkit": "0.3.0",
 		"@types/node": "24.13.3",
+		"commander": "15.0.0",
 		"oxfmt": "0.59.0",
 		"oxlint": "1.70.0",
 		"oxlint-tsgolint": "0.23.0",

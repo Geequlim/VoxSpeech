@@ -32,7 +32,7 @@ export async function playAudio(audio: Uint8Array, format: AudioFormat): Promise
 				format === "pcm"
 					? ["--format=s16", `--rate=${PCM_SAMPLE_RATE}`, `--channels=${PCM_CHANNELS}`, audioPath]
 					: [audioPath];
-			const child = spawn("pw-play", arguments_, { stdio: "ignore" });
+			const child = spawn("pw-play", arguments_, { stdio: ["ignore", "ignore", "inherit"] });
 			child.once("error", reject);
 			child.once("exit", (code, signal) => {
 				if (code === 0) resolve();

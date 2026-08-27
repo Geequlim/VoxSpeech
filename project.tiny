@@ -2,35 +2,29 @@ develop:
   actions:
     - name: cli
       description: 运行 VoxSpeech 开发态 CLI，后续参数原样传递给 Commander
-      command: node --import tsx apps/cli/src/main.ts
+      command: env XDG_CONFIG_HOME=.cache/voxspeech/dev/config XDG_DATA_HOME=.cache/voxspeech/dev/data XDG_CACHE_HOME=.cache/voxspeech/dev/cache node --import tsx apps/cli/src/main.ts
     - name: daemon
-      description: 使用 VOXSPEECH_ENGINE 指定的原生引擎运行开发态 daemon
-      command: node --import tsx apps/daemon/src/main.ts
-    - name: preview
-      description: 使用当前模型和 Voice 合成并立即播放，后续参数传给 speak
-      command: node --import tsx apps/cli/src/main.ts speak --play
+      description: 前台运行真实开发 daemon 并持续输出日志，Ctrl+C 停止
+      command: env XDG_CONFIG_HOME=.cache/voxspeech/dev/config XDG_DATA_HOME=.cache/voxspeech/dev/data XDG_CACHE_HOME=.cache/voxspeech/dev/cache node --import tsx tools/dev-daemon.mts
+    - name: native
+      description: 管理仓库缓存中的模型和原生构建产物
       actions:
-        - name: sample
-          description: 合成固定中文评测句，播放并保存到 /tmp/voxspeech-preview.wav
-          command: node --import tsx apps/cli/src/main.ts speak "你好，这里是 VoxSpeech 语音效果测试。现在将检查音色、语速、停顿和中文表达是否自然。" --play --output /tmp/voxspeech-preview.wav
-        - name: save
-          description: 合成自定义文本，播放并保存到 /tmp/voxspeech-preview.wav
-          command: node --import tsx apps/cli/src/main.ts speak --play --output /tmp/voxspeech-preview.wav
-        - name: status
-          description: 显示测试所用 daemon、engine 和模型状态
-          command: node --import tsx apps/cli/src/main.ts status
         - name: models
-          description: 显示可用于测试的模型
-          command: node --import tsx apps/cli/src/main.ts model list
-        - name: voices
-          description: 显示可用于测试的 Voice
-          command: node --import tsx apps/cli/src/main.ts voice list
-    - name: model
-      description: 模型开发工具
-      actions:
-        - name: download
-          description: 运行原生 probe 模型下载工具
-          command: node native/engine/probe/download-models.ts
+          description: 下载两个正式模型和 tokenizer 到仓库 .cache/voxspeech/models
+          command: node native/engine/probe/download-models.ts native/engine/probe/model-manifest.json --output-dir .cache/voxspeech/models
+        - name: build
+          description: 增量构建 CPU、CUDA、Vulkan 全部原生产物
+          command: node --import tsx tools/native-build.mts
+          actions:
+            - name: cpu
+              description: 增量构建 CPU 原生产物
+              command: node --import tsx tools/native-build.mts cpu
+            - name: cuda
+              description: 增量构建 CUDA 原生产物
+              command: node --import tsx tools/native-build.mts cuda
+            - name: vulkan
+              description: 增量构建 Vulkan 原生产物
+              command: node --import tsx tools/native-build.mts vulkan
     - name: typecheck
       description: 执行 TypeScript 类型检查
       command: yarn tsc -p tsconfig.json
@@ -46,18 +40,18 @@ develop:
             - ctest --test-dir dist/native --output-on-failure
     - name: lint
       description: 使用 Oxlint 执行静态代码分析
-      command: yarn oxlint -c oxlint.config.mts -f stylish apps packages
+      command: yarn oxlint -c oxlint.config.mts -f stylish apps packages tools
       actions:
         - name: fix
           description: 自动修复 Oxlint 问题
-          command: yarn oxlint -c oxlint.config.mts -f stylish apps packages --fix
+          command: yarn oxlint -c oxlint.config.mts -f stylish apps packages tools --fix
     - name: format
       description: 使用 Oxfmt 格式化项目文件
-      command: yarn oxfmt apps packages docs README.md AGENTS.md package.json tsconfig.base.json tsconfig.json oxlint.config.mts
+      command: yarn oxfmt apps packages tools docs README.md AGENTS.md package.json tsconfig.base.json tsconfig.json oxlint.config.mts
       actions:
         - name: check
           description: 检查项目格式
-          command: yarn oxfmt --check apps packages docs README.md AGENTS.md package.json tsconfig.base.json tsconfig.json oxlint.config.mts
+          command: yarn oxfmt --check apps packages tools docs README.md AGENTS.md package.json tsconfig.base.json tsconfig.json oxlint.config.mts
     - name: check
       description: 执行完整质量检查
       command:

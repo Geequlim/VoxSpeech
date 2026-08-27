@@ -192,6 +192,28 @@ describe("DaemonRpcClient", () => {
 		]);
 		client.close();
 	});
+
+	it("includes structured daemon error details in the displayed message", async () => {
+		const socketPath = await createSocketPath();
+		const services = createServices();
+		services.voices.clone = async () => {
+			throw new Error("Voice profile already exists: 甜妹助理");
+		};
+		servers.push(await startDaemonServer({ services, socketPath }));
+		const client = await DaemonRpcClient.connect({ socketPath });
+
+		await expect(
+			client.cloneVoice({
+				audioPath: "/tmp/reference.wav",
+				id: "甜妹助理",
+				transcript: "参考文本",
+			}),
+		).rejects.toMatchObject({
+			code: -32002,
+			message: "Invalid state: Voice profile already exists: 甜妹助理",
+		});
+		client.close();
+	});
 });
 
 function createServices(): DaemonServices {

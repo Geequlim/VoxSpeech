@@ -37,37 +37,63 @@ yarn install
 yarn tiny check
 ```
 
-开发态运行：
+首次准备模型并构建全部原生后端：
 
 ```bash
-VOXSPEECH_ENGINE=/path/to/voxspeech-engine yarn tiny daemon
-yarn tiny cli setup
-# setup 会提示重启 daemon，使选中的模型在受控启动时加载
-yarn tiny cli voice clone assistant reference.wav "参考音频文本"
-yarn tiny cli voice use assistant
-yarn tiny cli speak "你好" --output speech.wav
+yarn tiny native/models
+yarn tiny native/build
 ```
 
-快速试听当前 daemon 已加载的模型和 Voice：
+模型和增量构建产物固定保存在 Git 已忽略的 `.cache/voxspeech` 中。也可以只构建一个后端：
 
 ```bash
-# 一条固定评测句：播放并保存到 /tmp/voxspeech-preview.wav
-yarn tiny preview/sample
-
-# 任意文本：只播放
-yarn tiny preview "你好，这是一次快速试听。"
-
-# 任意文本：播放并保存，可用 --voice 临时指定 Voice
-yarn tiny preview/save --voice assistant "你好，这是指定音色的试听。"
-
-# 测试前查看实际加载状态、模型和 Voice
-yarn tiny preview/status
-yarn tiny preview/models
-yarn tiny preview/voices
+yarn tiny native/build/cpu
+yarn tiny native/build/cuda
+yarn tiny native/build/vulkan
 ```
 
-`preview` 复用 Commander 的 `speak` 和 daemon 合成链路。P3 不支持运行时动态切换模型或
-后端；执行 `model use` 或修改 backend 后，需要重启 daemon 再试听。
+真实 CLI 链路需要两个终端。第一个终端前台启动 daemon；它会一直运行并持续显示 native
+engine 日志，直到按下 `Ctrl+C`：
+
+```bash
+yarn tiny daemon
+```
+
+再次运行同一命令会先结束占用 VoxSpeech Socket 的旧 daemon，再启动新实例，不需要手工清理
+进程或 Socket。
+
+首次启动默认加载 0.6B Q8_0 与 Vulkan；之后无参数启动会沿用 `model use` 和配置中保存的
+模型与后端。可以显式覆盖：
+
+```bash
+yarn tiny daemon --model 1.7b --backend cuda
+```
+
+开发 daemon 会把 `yarn tiny native/models` 准备的两个模型都注册到产品模型仓库。切换后
+重新运行 daemon 即可加载新模型；旧实例会被自动替换：
+
+```bash
+yarn tiny cli model use qwen3-tts-1.7b-base-q4_k_m
+yarn tiny daemon
+```
+
+第二个终端直接使用产品 CLI：
+
+```bash
+yarn tiny cli status
+yarn tiny cli model list
+yarn tiny cli voice list
+yarn tiny cli voice clone '甜妹助理' reference.wav "参考音频的准确文本"
+yarn tiny cli speak "你好，这是命令行真实链路测试。" --output /tmp/voxspeech-cli.wav --play
+```
+
+Voice 名称是用户数据，支持中文、空格、路径字符、标点和 emoji。内部使用名称的 SHA-256
+作为存储目录；重复执行 `voice clone` 会原子更新同名 Profile，不需要先删除。
+
+这两个入口自动使用同一个开发态 Unix Socket：
+`$XDG_RUNTIME_DIR/voxspeech/daemon.sock`，不需要手工设置 engine 或 XDG 环境变量。配置、模型
+安装和下载缓存仍隔离在仓库的 `.cache/voxspeech/dev` 中；保留系统 runtime 目录可确保
+`--play` 正常连接 PipeWire。
 
 详细设计与实施顺序见：
 

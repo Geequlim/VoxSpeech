@@ -5,6 +5,7 @@ import {
 	DaemonInitializeResultSchema,
 	DaemonNotificationSchema,
 	DaemonStatusResultSchema,
+	type ErrorData,
 	ConfigUpdateResultSchema,
 	ConfigValidationResultSchema,
 	ErrorResponseSchema,
@@ -70,8 +71,9 @@ export class DaemonRpcError extends Error {
 	constructor(
 		message: string,
 		readonly code: number,
+		readonly data?: ErrorData,
 	) {
-		super(message);
+		super(data?.details ? `${message}: ${data.details}` : message);
 		this.name = "DaemonRpcError";
 	}
 }
@@ -403,7 +405,7 @@ export class DaemonRpcClient {
 		if (pending.timer) clearTimeout(pending.timer);
 		if (Value.Check(ErrorResponseSchema, value)) {
 			const error = value.error;
-			pending.reject(new DaemonRpcError(error.message, error.code));
+			pending.reject(new DaemonRpcError(error.message, error.code, error.data));
 		} else if (
 			"result" in value &&
 			Object.keys(value).every((key) => ["jsonrpc", "id", "result"].includes(key))
