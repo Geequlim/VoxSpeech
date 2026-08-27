@@ -13,8 +13,22 @@
 - fixture executable 与读取共享 golden fixtures 的 CTest，含真实 pipes 的
   子进程 NDJSON 验证。
 
-真实 qwentts runtime 由主集成基于 `voxspeech_engine_server` target 实现，
-不修改本目录之外的构建配置。
+真实 qwentts runtime 以固定 submodule 的 CMake overlay 构建，不复制或修改上游源码。
+每个 build directory 只生成一个后端的 `voxspeech-engine`：
+
+```bash
+cmake -S native/third_party/qwentts.cpp -B dist/engine-cpu -G Ninja \
+  -DCMAKE_PROJECT_INCLUDE="$PWD/native/engine/qwentts-inject.cmake" \
+  -DVOXSPEECH_ENGINE_ENABLE_QWENTTS=ON \
+  -DVOXSPEECH_ENGINE_BUILD_TESTS=OFF \
+  -DVOXSPEECH_ENGINE_BACKEND=cpu \
+  -DGGML_CUDA=OFF -DGGML_VULKAN=OFF
+cmake --build dist/engine-cpu --target voxspeech-engine
+```
+
+CUDA profile 使用 `VOXSPEECH_ENGINE_BACKEND=cuda`、`GGML_CUDA=ON` 和
+`GGML_STATIC=ON`；Vulkan profile 使用 `VOXSPEECH_ENGINE_BACKEND=vulkan`、
+`GGML_VULKAN=ON` 和 `GGML_STATIC=ON`。
 
 ## 线程与输出模型
 

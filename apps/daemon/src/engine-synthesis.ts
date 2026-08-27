@@ -4,8 +4,9 @@ import {
 	PCM_SAMPLE_RATE,
 	type DaemonSpeechSynthesizeParams,
 	type SpeechResult,
+	type EngineLoadParams,
 } from "@voxspeech/protocol";
-import { EngineRpcError, type EngineClient } from "@voxspeech/engine-client";
+import { EngineClient, EngineRpcError, type EngineClientOptions } from "@voxspeech/engine-client";
 
 import {
 	SynthesisServiceError,
@@ -76,6 +77,24 @@ export class EngineSynthesisService implements SynthesisService {
 
 	public close(): Promise<void> {
 		return this.client.shutdown();
+	}
+}
+
+export interface StartEngineSynthesisOptions {
+	readonly engine: EngineClientOptions;
+	readonly load: EngineLoadParams;
+}
+
+export async function startEngineSynthesisService(
+	options: StartEngineSynthesisOptions,
+): Promise<EngineSynthesisService> {
+	const client = await EngineClient.spawn(options.engine);
+	try {
+		await client.load(options.load);
+		return new EngineSynthesisService(client);
+	} catch (error) {
+		await client.shutdown().catch(() => undefined);
+		throw error;
 	}
 }
 

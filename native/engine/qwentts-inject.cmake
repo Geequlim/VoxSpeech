@@ -1,0 +1,7 @@
+if(NOT VOXSPEECH_ENGINE_OVERLAY_ADDED)
+	set(VOXSPEECH_ENGINE_OVERLAY_ADDED ON)
+	add_subdirectory(
+		"${CMAKE_CURRENT_LIST_DIR}"
+		"${CMAKE_BINARY_DIR}/voxspeech-engine"
+	)
+endif()
