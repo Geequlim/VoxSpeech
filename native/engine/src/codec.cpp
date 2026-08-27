@@ -71,6 +71,7 @@ bool OutputChannels::writeProtocol(const std::string_view json)
 	if (glz::read_json(syntaxProbe, json)) {
 		return false;
 	}
+	std::lock_guard lock{mutex_};
 	protocolOutput_ << json << '\n';
 	protocolOutput_.flush();
 	return protocolOutput_.good();
@@ -78,6 +79,7 @@ bool OutputChannels::writeProtocol(const std::string_view json)
 
 void OutputChannels::writeLog(const std::string_view message)
 {
+	std::lock_guard lock{mutex_};
 	logOutput_ << message << '\n';
 	logOutput_.flush();
 }

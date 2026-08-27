@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <iosfwd>
+#include <mutex>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -38,12 +39,14 @@ class OutputChannels {
 public:
 	OutputChannels(std::ostream& protocolOutput, std::ostream& logOutput);
 
+	// Both channels are safe to call from any thread; each call is serialized.
 	[[nodiscard]] bool writeProtocol(std::string_view json);
 	void writeLog(std::string_view message);
 
 private:
 	std::ostream& protocolOutput_;
 	std::ostream& logOutput_;
+	std::mutex mutex_;
 };
 
 } // namespace voxspeech::engine
