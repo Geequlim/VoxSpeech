@@ -95,6 +95,9 @@ native probe → qwentts.cpp → 真实 PCM/WAV
 
 ## 4. P2：真实 engine 端到端集成
 
+执行前必须遵守 `docs/decisions/p2-engine-integration.md` 的冻结契约。执行 Agent 不得自行
+修改 JSON-RPC version 1、共享 fixture、跨目录边界或 qwentts.cpp submodule。
+
 | 执行线  | 目录所有权               | 工作                                                  |
 | ------- | ------------------------ | ----------------------------------------------------- |
 | Agent A | `native/engine/src`      | JSON-RPC server、推理线程、取消回调、PCM notification |
