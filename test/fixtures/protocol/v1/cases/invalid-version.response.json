@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","id":"init-unsupported","error":{"code":-32001,"message":"Protocol version mismatch","data":{"code":"protocol_version_mismatch","stage":"initialize","retryable":false,"details":"Supported protocol version is 1"}}}

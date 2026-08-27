@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","id":"extract-1","method":"voice.extract","params":{"audioPath":"/tmp/voxspeech/ref.wav","speakerOutputPath":"/tmp/voxspeech/speaker.spk.new","codesOutputPath":"/tmp/voxspeech/reference.rvq.new"}}

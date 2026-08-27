@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","method":"speech.started","params":{"requestId":"synth-1","encoding":"pcm_s16le","sampleRate":24000,"channels":1}}

@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","id":"synth-1","method":"speech.synthesize","params":{"text":"任务已经完成。","language":"Chinese","speaker":null,"instruct":null,"reference":{"speakerPath":"/data/voices/assistant/speaker.spk","codesPath":"/data/voices/assistant/reference.rvq","text":"参考音频对应的文本"},"sampling":{"seed":-1,"maxNewTokens":2048}}}

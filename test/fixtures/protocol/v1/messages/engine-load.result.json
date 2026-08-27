@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","id":"load-1","result":{"backend":"cuda","modelType":"base","runtimeVersion":"0.1.0"}}

@@ -1,6 +1,19 @@
 # VoxSpeech Engine
 
-此目录用于 VoxSpeech 自有的 C++17 推理适配器。它通过私有子进程协议接收 daemon
-请求，调用固定版本的 qwentts.cpp C ABI，并返回状态事件与流式 PCM。
+本目录当前包含 C++23 engine 的私有协议基线：
 
-首个实现阶段只加入能力探针，不在这里承载配置、模型下载、HTTP 或 Voice 元数据管理。
+- Glaze JSON-RPC version 1 类型；
+- 最大 1 MiB、LF framing 的增量 NDJSON codec；
+- engine method 的请求分类与参数校验骨架；
+- stdout 协议输出与 stderr 日志输出的隔离组件；
+- 读取共享 golden fixtures 的 CTest。
+
+当前阶段不包含推理、模型加载或 qwentts.cpp 适配。
+
+独立验证：
+
+```bash
+cmake -S native/engine -B /tmp/voxspeech-native-build -G Ninja
+cmake --build /tmp/voxspeech-native-build
+ctest --test-dir /tmp/voxspeech-native-build --output-on-failure
+```

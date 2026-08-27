@@ -57,6 +57,10 @@ Unix Socket 是 daemon 的公共本地控制面，允许多个独立客户端连
 result 返回 `protocolVersion`、`serverInfo` 和 `capabilities`。版本不兼容时返回
 `-32001`，连接方不得继续发送其他业务请求。
 
+daemon 的 version 1 capabilities 固定为 `streamingAudio: true` 和
+`operationProgress: true`；engine 固定为 `streamingAudio: true` 和
+`voiceExtraction: true`。
+
 ## 4. Daemon 公共 RPC
 
 ### 4.1 生命周期与诊断
@@ -138,6 +142,38 @@ engine 准备完成后 daemon 发送 `speech.started`，随后发送零到多个
 ```
 
 进度 notification 只提供展示信息，不代表事务已经提交；最终 result 才表示操作完成。
+`completed` 和 `total` 只在阶段具有可量化进度时提供。
+
+### 4.7 Daemon version 1 最小 result
+
+`daemon.status` 固定返回：
+
+```json
+{
+	"daemon": { "state": "ready", "version": "0.1.0" },
+	"engine": { "state": "stopped", "backend": null, "modelId": null },
+	"model": { "defaultId": null },
+	"voice": { "defaultId": null },
+	"api": { "enabled": true, "host": "127.0.0.1", "port": 8080 }
+}
+```
+
+`diagnostics.get` 返回 `configPath`、`configValid`、`modelsDirectory`、
+`engineExecutable` 和 `recentErrors`。每个最近错误只有 `stage` 与 `message`。
+
+模型 result 使用以下最小形状：
+
+- `model.list`：`{ models: [{ id, installed, verified, active }] }`；
+- 其他模型操作：`{ id, success }`。
+
+Voice result 使用以下最小形状：
+
+- `voice.list`：`{ voices: [{ id, transcript, active }] }`；
+- `voice.show`：`{ id, transcript, active }`；
+- 其他 Voice 操作：`{ id, success }`。
+
+配置对象与 `configs/config.example.yaml` 保持同构。`config.validate` 返回
+`{ valid, errors }`，`config.update` 返回 `{ applied }`。
 
 ## 5. Engine 私有 RPC
 
@@ -175,6 +211,8 @@ daemon 结束旧进程并启动新进程完成。
 ```
 
 `backend` 允许 `auto`、`cuda`、`vulkan` 和 `cpu`。V1 发布默认 `maxBatch` 为 1。
+result 固定返回 `{ backend, modelType, runtimeVersion }`，其中 `modelType` 允许
+`base`、`custom_voice` 和 `voice_design`。
 
 ### 5.3 `speech.synthesize`
 
@@ -202,6 +240,9 @@ params 使用 engine 已加载模型，不接受产品层的 Voice ID。daemon �
 `speaker` 与 `reference` 互斥。具体模型模式不支持某组参数时返回 invalid params 或 model
 mode error，不进行隐式降级。
 
+成功 result 固定返回 `{ sampleCount, durationMs, firstAudioMs, processingMs }`。以上时间
+字段使用非负整数毫秒；RTF 由 daemon 根据音频时长和处理耗时计算。
+
 ### 5.4 `voice.extract`
 
 daemon 负责准备合法 WAV 和临时输出路径：
@@ -216,6 +257,10 @@ daemon 负责准备合法 WAV 和临时输出路径：
 
 engine 只写临时结果。校验、元数据和最终原子提交由 daemon 完成。该方法只允许 Base
 模型调用，result 返回 speaker dimension、codebook count 和 frame count。
+
+`engine.status` result 固定返回 `{ state, backend, modelType, runtimeVersion }`；模型未
+加载时 `backend` 与 `modelType` 为 `null`。`speech.cancel` 返回 `{ accepted }`，
+`engine.shutdown` 返回 `{ accepted: true }`。
 
 ## 6. 流式音频
 

@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","id":"load-1","error":{"code":-32003,"message":"Model load failed","data":{"code":"model_load_failed","stage":"engine.load","retryable":false,"details":"Unable to open the talker model"}}}

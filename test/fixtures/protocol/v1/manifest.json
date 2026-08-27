@@ -1,0 +1,67 @@
+{
+	"protocolVersion": 1,
+	"format": "one JSON-RPC object per file",
+	"validExchanges": [
+		{
+			"name": "initialize",
+			"files": ["messages/initialize.request.json", "messages/initialize.result.json"]
+		},
+		{
+			"name": "engine.load",
+			"files": ["messages/engine-load.request.json", "messages/engine-load.result.json"]
+		},
+		{
+			"name": "engine.status",
+			"files": ["messages/engine-status.request.json", "messages/engine-status.result.json"]
+		},
+		{
+			"name": "speech.synthesize",
+			"files": [
+				"messages/speech-synthesize.request.json",
+				"messages/speech-started.notification.json",
+				"messages/speech-audio.notification.json",
+				"messages/speech-synthesize.result.json"
+			]
+		},
+		{
+			"name": "speech.cancel",
+			"files": ["messages/speech-cancel.request.json", "messages/speech-cancel.result.json"]
+		},
+		{
+			"name": "voice.extract",
+			"files": ["messages/voice-extract.request.json", "messages/voice-extract.result.json"]
+		},
+		{
+			"name": "engine.shutdown",
+			"files": ["messages/engine-shutdown.request.json", "messages/engine-shutdown.result.json"]
+		},
+		{
+			"name": "standard error",
+			"files": ["messages/standard-error.response.json"]
+		},
+		{
+			"name": "custom error",
+			"files": ["messages/custom-error.response.json"]
+		}
+	],
+	"errorCases": [
+		{
+			"name": "invalid protocol version",
+			"request": "cases/invalid-version.request.json",
+			"response": "cases/invalid-version.response.json",
+			"errorCode": -32001
+		},
+		{
+			"name": "invalid params",
+			"request": "cases/invalid-params.request.json",
+			"response": "cases/invalid-params.response.json",
+			"errorCode": -32602
+		},
+		{
+			"name": "unknown method",
+			"request": "cases/unknown-method.request.json",
+			"response": "cases/unknown-method.response.json",
+			"errorCode": -32601
+		}
+	]
+}

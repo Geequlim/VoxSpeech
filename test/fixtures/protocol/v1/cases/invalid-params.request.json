@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","id":"load-invalid","method":"engine.load","params":{"talkerPath":"/data/models/talker.gguf","codecPath":"/data/models/tokenizer.gguf","backend":"cuda","maxBatch":0}}

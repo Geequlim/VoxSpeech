@@ -6,6 +6,13 @@ develop:
     - name: test
       description: 执行 Vitest 单元测试
       command: yarn vitest run
+      actions:
+        - name: native
+          description: 构建并执行 C++ 协议测试
+          command:
+            - cmake -S . -B dist/native -G Ninja -DCMAKE_BUILD_TYPE=Debug
+            - cmake --build dist/native
+            - ctest --test-dir dist/native --output-on-failure
     - name: lint
       description: 使用 Oxlint 执行静态代码分析
       command: yarn oxlint -c oxlint.config.mts -f stylish apps packages
@@ -27,6 +34,7 @@ develop:
         - yarn tiny lint
         - yarn tiny format/check
         - yarn tiny test
+        - yarn tiny test/native
     - name: fix-worktree
       description: 规范化工作区
       command:
