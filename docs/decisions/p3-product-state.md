@@ -55,16 +55,18 @@ fsync、rename 与 parent directory fsync。`config.validate` 只校验；`confi
 
 ## 4. 模型契约
 
-P3 内置 catalog 只包含已验收的 `qwen3-tts-1.7b-base-q4_k_m`，固定：
+P3 内置 catalog 包含已验收的 1.7B 与 0.6B Base Q4_K_M；`setup` 固定安装并启用
+`qwen3-tts-1.7b-base-q4_k_m`。两个条目固定：
 
 - repository `Serveurperso/Qwen3-TTS-GGUF`；
 - revision `e0f336a048a3de02b29b8ad92969217d9ecffe3e`；
 - talker 与 tokenizer 的路径、size、SHA256 使用 P1 固定值。
 
 安装使用 `@tinyaxis/model-downloader` 的 manifest API，不重新实现网络传输。下载目录为
-`<cache>/downloads/<id>.staging`，允许跨重启续传；全部文件校验成功后写入私有安装 metadata，
-fsync，并把完整目录原子 rename 到 `<data>/models/<id>`。只有完整最终目录且 metadata 与
-catalog 匹配才视为 installed。`model.verify` 必须离线重新计算 size/SHA256。
+`<cache>/downloads/<id>.staging`，允许跨重启续传。cache 与 data 同文件系统时，完整校验并写入
+私有 metadata 后直接原子 rename；跨文件系统时，先复制到 `<data>/models` 内的私有 promotion
+staging，重新校验并 fsync，再原子 rename 到最终目录。只有完整最终目录且 metadata 与 catalog
+匹配才视为 installed。`model.verify` 必须离线重新计算 size/SHA256。
 
 镜像、代理和连接数优先级：
 
@@ -107,7 +109,8 @@ metadata；全部 fsync 后原子 rename 成最终 Profile。失败清理 stagin
 { id, hubUrl?, proxy?, connections? }
 ```
 
-其他 model、voice 与 config schema 保持现状。CLI 固定新增：
+其他 model、voice 与 config schema 保持现状。CLI 使用 Commander 构建命令树、参数校验与帮助，
+固定新增：
 
 ```text
 voxspeech setup [--hub-url URL] [--proxy URL] [--connections N]

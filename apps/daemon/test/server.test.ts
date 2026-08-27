@@ -3,9 +3,10 @@ import { createConnection, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { createDefaultConfig } from "@voxspeech/config";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { startDaemonServer, type DaemonServer } from "../src/index.js";
+import { startDaemonServer, type DaemonServer, type DaemonServices } from "../src/index.js";
 
 const servers: DaemonServer[] = [];
 const directories: string[] = [];
@@ -115,7 +116,83 @@ describe("daemon socket server", () => {
 		await writeFile(socketPath, "keep");
 		await expect(startDaemonServer({ socketPath })).rejects.toThrow("non-socket path");
 	});
+
+	it("serves persistent config, model, and Voice operations", async () => {
+		const socketPath = await createSocketPath();
+		const config = createDefaultConfig();
+		const services = createServices(config);
+		servers.push(await startDaemonServer({ services, socketPath }));
+		const socket = await connect(socketPath);
+		await initialize(socket);
+
+		await expect(
+			send(socket, { id: "config-1", jsonrpc: "2.0", method: "config.get", params: {} }),
+		).resolves.toMatchObject({ result: config });
+		await expect(
+			send(socket, { id: "models-1", jsonrpc: "2.0", method: "model.list", params: {} }),
+		).resolves.toMatchObject({ result: { models: [{ id: "model", verified: true }] } });
+		await expect(
+			send(socket, { id: "voices-1", jsonrpc: "2.0", method: "voice.list", params: {} }),
+		).resolves.toMatchObject({ result: { voices: [{ id: "voice", transcript: "reference" }] } });
+		socket.destroy();
+	});
+
+	it("streams install progress and aborts the operation after disconnect", async () => {
+		const socketPath = await createSocketPath();
+		let installSignal: AbortSignal | undefined;
+		const services = createServices(createDefaultConfig());
+		services.models.install = vi.fn(async (_id, options) => {
+			installSignal = options.signal;
+			options.onProgress?.({ bytes: 5, file: "model.gguf", size: 10 });
+			await new Promise<void>((_resolve, reject) =>
+				options.signal?.addEventListener("abort", () => reject(options.signal?.reason), {
+					once: true,
+				}),
+			);
+		});
+		servers.push(await startDaemonServer({ services, socketPath }));
+		const socket = await connect(socketPath);
+		await initialize(socket);
+		const progress = send(socket, {
+			id: "install-1",
+			jsonrpc: "2.0",
+			method: "model.install",
+			params: { id: "model" },
+		});
+
+		await expect(progress).resolves.toMatchObject({
+			method: "operation.progress",
+			params: { completed: 5, requestId: "install-1", total: 10 },
+		});
+		socket.destroy();
+		await waitFor(() => installSignal?.aborted === true);
+		expect(installSignal?.aborted).toBe(true);
+	});
 });
+
+function createServices(config: ReturnType<typeof createDefaultConfig>): DaemonServices {
+	return {
+		config: {
+			get: () => config,
+			update: async () => undefined,
+			validate: () => ({ errors: [], valid: true }),
+		},
+		models: {
+			install: async () => undefined,
+			list: async () => [{ active: true, id: "model", installed: true, verified: true }],
+			remove: async () => undefined,
+			use: async () => undefined,
+			verify: async () => true,
+		},
+		voices: {
+			clone: async () => undefined,
+			list: async () => [{ active: true, id: "voice", transcript: "reference" }],
+			remove: async () => undefined,
+			show: async (id) => ({ active: true, id, transcript: "reference" }),
+			use: async () => undefined,
+		},
+	};
+}
 
 async function createSocketPath(): Promise<string> {
 	const directory = await mkdtemp(path.join(tmpdir(), "voxspeech-daemon-test-"));
@@ -154,4 +231,8 @@ function send(socket: Socket, request: unknown): Promise<unknown> {
 		socket.once("error", reject);
 		socket.write(`${JSON.stringify(request)}\n`);
 	});
+}
+
+async function waitFor(predicate: () => boolean): Promise<void> {
+	while (!predicate()) await new Promise((resolve) => setTimeout(resolve, 1));
 }

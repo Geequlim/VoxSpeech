@@ -8,15 +8,13 @@
 		"apps/*",
 		"packages/*"
 	],
-	"scripts": {
-		"model:download": "node native/engine/probe/download-models.ts"
-	},
 	"devDependencies": {
 		"@tinyaxis/toolkit": "0.3.0",
 		"@types/node": "24.13.3",
 		"oxfmt": "0.59.0",
 		"oxlint": "1.70.0",
 		"oxlint-tsgolint": "0.23.0",
+		"tsx": "4.23.12",
 		"typescript": "7.0.2",
 		"vitest": "4.1.10"
 	},

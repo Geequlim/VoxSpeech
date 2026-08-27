@@ -7,7 +7,9 @@ import {
 	createFakeSynthesis,
 	startDaemonServer,
 	type DaemonServer,
+	type DaemonServices,
 } from "../../daemon/src/index.js";
+import { createDefaultConfig } from "@voxspeech/config";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { DaemonRpcClient, type DaemonRpcError } from "../src/index.js";
@@ -168,7 +170,53 @@ describe("DaemonRpcClient", () => {
 			);
 		}
 	});
+
+	it("keeps long operations pending and forwards progress notifications", async () => {
+		const socketPath = await createSocketPath();
+		const services = createServices();
+		services.models.install = async (_id, options) => {
+			options.onProgress?.({ bytes: 1, file: "talker.gguf", size: 2 });
+			await new Promise((resolve) => setTimeout(resolve, 40));
+			options.onProgress?.({ bytes: 2, file: "talker.gguf", size: 2 });
+		};
+		servers.push(await startDaemonServer({ services, socketPath }));
+		const client = await DaemonRpcClient.connect({ requestTimeoutMs: 20, socketPath });
+		const progress: Array<{ completed?: number; requestId: string }> = [];
+
+		await expect(
+			client.installModel({ id: "model" }, { onProgress: (event) => progress.push(event) }),
+		).resolves.toEqual({ id: "model", success: true });
+		expect(progress).toEqual([
+			expect.objectContaining({ completed: 1, requestId: "cli-2" }),
+			expect.objectContaining({ completed: 2, requestId: "cli-2" }),
+		]);
+		client.close();
+	});
 });
+
+function createServices(): DaemonServices {
+	return {
+		config: {
+			get: createDefaultConfig,
+			update: async () => undefined,
+			validate: () => ({ errors: [], valid: true }),
+		},
+		models: {
+			install: async () => undefined,
+			list: async () => [],
+			remove: async () => undefined,
+			use: async () => undefined,
+			verify: async () => true,
+		},
+		voices: {
+			clone: async () => undefined,
+			list: async () => [],
+			remove: async () => undefined,
+			show: async (id) => ({ active: false, id, transcript: "reference" }),
+			use: async () => undefined,
+		},
+	};
+}
 
 async function createSocketPath(): Promise<string> {
 	const directory = await mkdtemp(path.join(tmpdir(), "voxspeech-client-test-"));

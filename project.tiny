@@ -1,5 +1,17 @@
 develop:
   actions:
+    - name: cli
+      description: 运行 VoxSpeech 开发态 CLI，后续参数原样传递给 Commander
+      command: node --import tsx apps/cli/src/main.ts
+    - name: daemon
+      description: 使用 VOXSPEECH_ENGINE 指定的原生引擎运行开发态 daemon
+      command: node --import tsx apps/daemon/src/main.ts
+    - name: model
+      description: 模型开发工具
+      actions:
+        - name: download
+          description: 运行原生 probe 模型下载工具
+          command: node native/engine/probe/download-models.ts
     - name: typecheck
       description: 执行 TypeScript 类型检查
       command: yarn tsc -p tsconfig.json

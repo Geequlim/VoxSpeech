@@ -5,19 +5,38 @@ import {
 	DaemonInitializeResultSchema,
 	DaemonNotificationSchema,
 	DaemonStatusResultSchema,
+	ConfigUpdateResultSchema,
+	ConfigValidationResultSchema,
 	ErrorResponseSchema,
 	JSON_RPC_VERSION,
 	MAX_AUDIO_CHUNK_BYTES,
 	MAX_MESSAGE_BYTES,
+	ModelListResultSchema,
+	ModelOperationResultSchema,
 	PROTOCOL_VERSION,
 	type PCM_CHANNELS,
 	type PCM_ENCODING,
 	type PCM_SAMPLE_RATE,
 	SpeechResultSchema,
+	VoiceListResultSchema,
+	VoiceOperationResultSchema,
+	VoiceProfileSchema,
+	VoxSpeechConfigSchema,
+	type ConfigUpdateResult,
+	type ConfigValidationResult,
 	type DaemonSpeechSynthesizeParams,
 	type DaemonStatusResult,
+	type ModelInstallParams,
+	type ModelListResult,
+	type ModelOperationResult,
+	type OperationProgressParams,
 	type SpeechResult,
 	type SpeechStartedParams,
+	type VoiceCloneParams,
+	type VoiceListResult,
+	type VoiceOperationResult,
+	type VoiceProfile,
+	type VoxSpeechConfig,
 } from "@voxspeech/protocol";
 
 export interface RpcClientOptions {
@@ -37,10 +56,14 @@ export interface SynthesisOutput {
 	readonly result: SpeechResult;
 }
 
+export interface OperationOptions {
+	readonly onProgress?: (progress: OperationProgressParams) => void;
+}
+
 interface PendingRequest {
 	reject(error: Error): void;
 	resolve(result: unknown): void;
-	timer: NodeJS.Timeout;
+	timer?: NodeJS.Timeout;
 }
 
 export class DaemonRpcError extends Error {
@@ -60,6 +83,7 @@ export class DaemonRpcClient {
 	readonly #audioChunks = new Map<string, Buffer[]>();
 	readonly #started = new Map<string, SpeechStartedParams>();
 	readonly #nextSequence = new Map<string, number>();
+	readonly #progress = new Map<string, (progress: OperationProgressParams) => void>();
 	#buffer = Buffer.alloc(0);
 	#nextId = 1;
 	#closed = false;
@@ -97,6 +121,111 @@ export class DaemonRpcClient {
 		const result = await this.#request("daemon.status", {});
 		if (!isDaemonStatus(result)) throw new Error("Daemon returned an invalid status result");
 		return result;
+	}
+
+	async getConfig(): Promise<VoxSpeechConfig> {
+		return this.#validatedRequest("config.get", {}, VoxSpeechConfigSchema, "config");
+	}
+
+	async validateConfig(config: VoxSpeechConfig): Promise<ConfigValidationResult> {
+		return this.#validatedRequest(
+			"config.validate",
+			{ config },
+			ConfigValidationResultSchema,
+			"config validation",
+		);
+	}
+
+	async updateConfig(config: VoxSpeechConfig): Promise<ConfigUpdateResult> {
+		return this.#validatedRequest(
+			"config.update",
+			{ config },
+			ConfigUpdateResultSchema,
+			"config update",
+		);
+	}
+
+	async listModels(): Promise<ModelListResult> {
+		return this.#validatedRequest("model.list", {}, ModelListResultSchema, "model list");
+	}
+
+	async installModel(
+		params: ModelInstallParams,
+		options: OperationOptions = {},
+	): Promise<ModelOperationResult> {
+		return this.#operation(
+			"model.install",
+			params,
+			ModelOperationResultSchema,
+			"model install",
+			options,
+		);
+	}
+
+	async verifyModel(id: string): Promise<ModelOperationResult> {
+		return this.#validatedRequest(
+			"model.verify",
+			{ id },
+			ModelOperationResultSchema,
+			"model verification",
+		);
+	}
+
+	async useModel(id: string): Promise<ModelOperationResult> {
+		return this.#validatedRequest(
+			"model.use",
+			{ id },
+			ModelOperationResultSchema,
+			"model selection",
+		);
+	}
+
+	async removeModel(id: string): Promise<ModelOperationResult> {
+		return this.#validatedRequest(
+			"model.remove",
+			{ id },
+			ModelOperationResultSchema,
+			"model removal",
+		);
+	}
+
+	async listVoices(): Promise<VoiceListResult> {
+		return this.#validatedRequest("voice.list", {}, VoiceListResultSchema, "voice list");
+	}
+
+	async cloneVoice(
+		params: VoiceCloneParams,
+		options: OperationOptions = {},
+	): Promise<VoiceOperationResult> {
+		return this.#operation(
+			"voice.clone",
+			params,
+			VoiceOperationResultSchema,
+			"voice clone",
+			options,
+		);
+	}
+
+	async showVoice(id: string): Promise<VoiceProfile> {
+		return this.#validatedRequest("voice.show", { id }, VoiceProfileSchema, "voice profile");
+	}
+
+	async useVoice(id: string): Promise<VoiceOperationResult> {
+		return this.#validatedRequest(
+			"voice.use",
+			{ id },
+			VoiceOperationResultSchema,
+			"voice selection",
+		);
+	}
+
+	async removeVoice(id: string): Promise<VoiceOperationResult> {
+		return this.#validatedRequest(
+			"voice.remove",
+			{ id },
+			VoiceOperationResultSchema,
+			"voice removal",
+		);
 	}
 
 	async synthesize(
@@ -144,19 +273,57 @@ export class DaemonRpcClient {
 		return this.#requestWithId(this.#allocateId(), method, params);
 	}
 
-	#requestWithId(id: string, method: string, params: unknown): Promise<unknown> {
+	async #validatedRequest<T>(
+		method: string,
+		params: unknown,
+		schema: Parameters<typeof Value.Check>[0],
+		label: string,
+	): Promise<T> {
+		const result = await this.#request(method, params);
+		if (!Value.Check(schema, result)) throw new Error(`Daemon returned an invalid ${label} result`);
+		return result as T;
+	}
+
+	async #operation<T>(
+		method: string,
+		params: unknown,
+		schema: Parameters<typeof Value.Check>[0],
+		label: string,
+		options: OperationOptions,
+	): Promise<T> {
+		const id = this.#allocateId();
+		if (options.onProgress) this.#progress.set(id, options.onProgress);
+		try {
+			const result = await this.#requestWithId(id, method, params, 0);
+			if (!Value.Check(schema, result))
+				throw new Error(`Daemon returned an invalid ${label} result`);
+			return result as T;
+		} finally {
+			this.#progress.delete(id);
+		}
+	}
+
+	#requestWithId(
+		id: string,
+		method: string,
+		params: unknown,
+		timeoutMs: number = this.#requestTimeoutMs,
+	): Promise<unknown> {
 		if (this.#closed) return Promise.reject(new Error("Daemon connection is closed"));
 		return new Promise((resolve, reject) => {
-			const timer = setTimeout(() => {
-				this.#pending.delete(id);
-				reject(new Error(`Daemon request timed out: ${method}`));
-			}, this.#requestTimeoutMs);
+			const timer =
+				timeoutMs > 0
+					? setTimeout(() => {
+							this.#pending.delete(id);
+							reject(new Error(`Daemon request timed out: ${method}`));
+						}, timeoutMs)
+					: undefined;
 			this.#pending.set(id, { reject, resolve, timer });
 			this.#socket.write(
 				`${JSON.stringify({ jsonrpc: JSON_RPC_VERSION, id, method, params })}\n`,
 				(error) => {
 					if (!error) return;
-					clearTimeout(timer);
+					if (timer) clearTimeout(timer);
 					this.#pending.delete(id);
 					reject(error);
 				},
@@ -203,7 +370,10 @@ export class DaemonRpcClient {
 		if ("method" in value) {
 			if (!Value.Check(DaemonNotificationSchema, value))
 				return void this.#protocolFailure("Daemon returned an invalid notification");
-			if (value.method === "operation.progress") return;
+			if (value.method === "operation.progress") {
+				this.#progress.get(value.params.requestId)?.(value.params);
+				return;
+			}
 			if (value.method === "speech.started") {
 				const params = value.params;
 				if (this.#started.has(params.requestId))
@@ -230,7 +400,7 @@ export class DaemonRpcClient {
 		const pending = this.#pending.get(value.id);
 		if (!pending) return;
 		this.#pending.delete(value.id);
-		clearTimeout(pending.timer);
+		if (pending.timer) clearTimeout(pending.timer);
 		if (Value.Check(ErrorResponseSchema, value)) {
 			const error = value.error;
 			pending.reject(new DaemonRpcError(error.message, error.code));
@@ -251,7 +421,7 @@ export class DaemonRpcClient {
 
 	#failAll(error: Error): void {
 		for (const pending of this.#pending.values()) {
-			clearTimeout(pending.timer);
+			if (pending.timer) clearTimeout(pending.timer);
 			pending.reject(error);
 		}
 		this.#pending.clear();

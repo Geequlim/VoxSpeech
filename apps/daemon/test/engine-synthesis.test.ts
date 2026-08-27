@@ -51,9 +51,24 @@ describe("EngineSynthesisService", () => {
 		});
 	});
 
-	it("rejects voice IDs without treating them as paths", async () => {
+	it("resolves voice IDs to a leased engine reference", async () => {
 		const { logPath } = await createEnvironment();
-		const service = new EngineSynthesisService(await spawnEngine("happy", logPath));
+		let released = false;
+		const service = new EngineSynthesisService(await spawnEngine("happy", logPath), {
+			resolveVoice: async (id) => {
+				expect(id).toBe("profile-id");
+				return {
+					reference: {
+						codesPath: "/profiles/profile-id/reference.rvq",
+						speakerPath: "/profiles/profile-id/speaker.spk",
+						text: "参考文本",
+					},
+					release: () => {
+						released = true;
+					},
+				};
+			},
+		});
 
 		await expect(
 			service.run(
@@ -61,11 +76,15 @@ describe("EngineSynthesisService", () => {
 				new AbortController().signal,
 				() => undefined,
 			),
-		).rejects.toMatchObject({
-			code: "invalid_state",
-			retryable: false,
-		} satisfies Partial<SynthesisServiceError>);
-		await expect(readFile(logPath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+		).resolves.toMatchObject({ sampleCount: 2 });
+		expect(released).toBe(true);
+		expect(await readSynthesisParams(logPath)).toMatchObject({
+			reference: {
+				codesPath: "/profiles/profile-id/reference.rvq",
+				speakerPath: "/profiles/profile-id/speaker.spk",
+				text: "参考文本",
+			},
+		});
 	});
 
 	it("cancels the EngineClient request only once when its signal aborts", async () => {

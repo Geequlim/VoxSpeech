@@ -90,6 +90,7 @@ export const VoiceReferenceSchema = strictObject({
 	codesPath: Type.String({ minLength: 1 }),
 	text: Type.String({ minLength: 1 }),
 });
+export type VoiceReference = Static<typeof VoiceReferenceSchema>;
 export const SamplingSchema = strictObject({
 	seed: Type.Integer(),
 	maxNewTokens: Type.Integer({ minimum: 1 }),

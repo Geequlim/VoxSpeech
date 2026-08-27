@@ -129,6 +129,8 @@ voxspeech speak
 
 ## 5. P3：配置、模型和 Voice 并行
 
+> 状态：实现与自动化/真实 Vulkan 验收完成，等待用户验收；P4 尚未启动。
+
 三个 Agent 只修改 daemon 内各自子目录及对应测试，避免提前增加 workspace 包。
 
 | 执行线  | 目录所有权                              | 工作                                                       |

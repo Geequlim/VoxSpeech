@@ -1,4 +1,4 @@
-import { appendFileSync } from "node:fs";
+import { appendFileSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 
 const mode = process.argv[2] ?? "happy";
@@ -79,6 +79,13 @@ input.on("line", (line) => {
 		const accepted = request.params.requestId === activeRequestId;
 		result(request.id, { accepted });
 		if (accepted) synthesisError(activeRequestId, "Fake synthesis cancelled");
+		return;
+	}
+	if (request.method === "voice.extract") {
+		log({ method: request.method, params: request.params });
+		writeFileSync(request.params.speakerOutputPath, Buffer.from([1, 2, 3, 4]));
+		writeFileSync(request.params.codesOutputPath, Buffer.from([5, 6, 7, 8]));
+		result(request.id, { speakerDimension: 2, codebookCount: 1, frameCount: 1 });
 		return;
 	}
 	if (request.method === "engine.shutdown") {
